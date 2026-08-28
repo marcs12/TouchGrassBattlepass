@@ -20,6 +20,7 @@ export default function Header({
   members,
   activeId,
   earned,
+  code,
   onSwitch,
 }) {
   const shown = useCountUp(balance)
@@ -79,6 +80,7 @@ export default function Header({
           members={members}
           activeId={activeId}
           earned={earned}
+          code={code}
           onSwitch={onSwitch}
         />
         <ThemePicker />

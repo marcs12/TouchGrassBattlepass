@@ -1010,6 +1010,11 @@ h3 {
 
 /* ---------- season pass ---------- */
 
+.banner--warn {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
 .banner {
   display: flex;
   align-items: center;
@@ -1280,6 +1285,54 @@ h3 {
   height: 10px;
   border-radius: 3px;
   border: 1.5px solid var(--ink);
+}
+
+.input--code {
+  font-family: var(--font-label);
+  font-size: 18px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: var(--radius-md);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--shadow-color);
+  font-size: 16px;
+  transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease);
+}
+
+.pick:active {
+  transform: translate(var(--shadow-off), var(--shadow-off));
+  box-shadow: 0 0 0 var(--shadow-color);
+}
+
+.pick__go {
+  margin-left: auto;
+  transform: rotate(-90deg);
+  color: var(--ink-3);
+}
+
+.themer__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 2px 2px;
+  padding-top: 9px;
+  border-top: var(--border-w) dashed var(--line);
+}
+
+.themer__foot strong {
+  font-family: var(--font-label);
+  font-size: 14px;
+  letter-spacing: 0.14em;
 }
 
 /* ---------- contribution log ---------- */
@@ -1568,7 +1621,9 @@ h3 {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .store__head {
+  /* Only split into two columns when there is actually a side panel -
+     otherwise a lone heading gets squeezed into the leftover 1fr. */
+  .store__head:has(.nextup) {
     grid-template-columns: 1fr minmax(240px, 300px);
     align-items: stretch;
     gap: 20px;

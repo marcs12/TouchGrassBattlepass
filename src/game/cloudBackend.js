@@ -1,0 +1,365 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { supabase } from '../lib/supabase'
+import { DAILY_HABITS } from '../data/habits'
+import { dayKey, shiftDay } from '../lib/day'
+
+// Supabase-backed mode: two devices, one board.
+//
+// Nothing stores a balance. Points are derived from the rows every time, so
+// two phones checking things off at the same moment can't clobber each other.
+
+const HOUSEHOLD_KEY = 'tgbp.household'
+const HISTORY_DAYS = 45
+const LOG_LIMIT = 40
+
+const rememberHousehold = (id) => {
+  try {
+    if (id) localStorage.setItem(HOUSEHOLD_KEY, id)
+    else localStorage.removeItem(HOUSEHOLD_KEY)
+  } catch {
+    /* private mode - we re-discover the household from the server anyway */
+  }
+}
+
+const readHousehold = () => {
+  try {
+    return localStorage.getItem(HOUSEHOLD_KEY)
+  } catch {
+    return null
+  }
+}
+
+/** Rows in, the exact view model the components already consume out. */
+function project(rows, today) {
+  const { household, members, checks, redemptions, claims } = rows
+
+  const roster = [...members]
+    .sort((a, b) => a.slot - b.slot)
+    .map((m) => ({ id: m.id, name: m.name, slot: m.slot }))
+
+  const earned = Object.fromEntries(roster.map((m) => [m.id, 0]))
+  const done = {}
+  const byMemberDay = new Map()
+
+  for (const check of checks) {
+    earned[check.member_id] = (earned[check.member_id] ?? 0) + check.points
+    if (check.day === today) {
+      done[check.member_id] = [...(done[check.member_id] ?? []), check.habit_id]
+    }
+    const key = `${check.member_id}|${check.day}`
+    byMemberDay.set(key, [...(byMemberDay.get(key) ?? []), check.habit_id])
+  }
+
+  // A day counts toward the streak when that member cleared every daily habit.
+  const goalDates = {}
+  for (const [key, habitIds] of byMemberDay) {
+    const [memberId, day] = key.split('|')
+    const cleared = new Set(habitIds)
+    if (DAILY_HABITS.every((h) => cleared.has(h.id))) {
+      goalDates[memberId] = [...(goalDates[memberId] ?? []), day]
+    }
+  }
+
+  const spent = redemptions.reduce((sum, r) => sum + r.cost, 0)
+  const bonuses = claims.reduce((sum, c) => sum + (c.bonus ?? 0), 0)
+  const xp = checks.reduce((sum, c) => sum + c.points, 0)
+
+  return {
+    code: household?.code ?? null,
+    members: roster,
+    balance: (household?.seed_balance ?? 0) + xp + bonuses - spent,
+    earned,
+    grind: { date: today, done, goalDates },
+    season: { xp, claimed: claims.map((c) => c.tier) },
+    redeemed: redemptions.map((r) => ({
+      receiptId: r.id,
+      id: r.reward_id,
+      title: r.title,
+      cost: r.cost,
+      icon: r.icon,
+      hue: r.hue,
+      tier: r.tier,
+      redeemedAt: new Date(r.created_at).getTime(),
+      by: r.member_id,
+    })),
+    log: [...checks]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, LOG_LIMIT)
+      .map((c) => ({
+        id: c.id,
+        memberId: c.member_id,
+        label: c.title,
+        points: c.points,
+        at: new Date(c.created_at).getTime(),
+      })),
+  }
+}
+
+const emptyRows = {
+  household: null,
+  members: [],
+  checks: [],
+  redemptions: [],
+  claims: [],
+}
+
+export function useCloudGame() {
+  const [ready, setReady] = useState(false)
+  const [error, setError] = useState(null)
+  const [householdId, setHouseholdId] = useState(null)
+  const [activeId, setActiveId] = useState(null)
+  const [rows, setRows] = useState(emptyRows)
+  const [today, setToday] = useState(dayKey())
+  const refetchTimer = useRef(null)
+
+  const fetchRows = useCallback(async (id) => {
+    if (!id) return
+    const since = shiftDay(dayKey(), -HISTORY_DAYS)
+
+    const [household, members, checks, redemptions, claims] = await Promise.all([
+      supabase.from('households').select('*').eq('id', id).maybeSingle(),
+      supabase.from('members').select('*').eq('household_id', id),
+      supabase.from('habit_checks').select('*').eq('household_id', id).gte('day', since),
+      supabase.from('redemptions').select('*').eq('household_id', id).order('created_at', { ascending: false }),
+      supabase.from('tier_claims').select('*').eq('household_id', id),
+    ])
+
+    const failure = [household, members, checks, redemptions, claims].find((r) => r.error)
+    if (failure) {
+      setError(failure.error.message)
+      return
+    }
+
+    setError(null)
+    setRows({
+      household: household.data,
+      members: members.data ?? [],
+      checks: checks.data ?? [],
+      redemptions: redemptions.data ?? [],
+      claims: claims.data ?? [],
+    })
+  }, [])
+
+  // Realtime is a nudge, not a diff: any change just re-reads the board.
+  const scheduleRefetch = useCallback(
+    (id) => {
+      clearTimeout(refetchTimer.current)
+      refetchTimer.current = setTimeout(() => fetchRows(id), 120)
+    },
+    [fetchRows]
+  )
+
+  // Sign in anonymously, then find the household this device already joined.
+  useEffect(() => {
+    let cancelled = false
+
+    const boot = async () => {
+      try {
+        const { data } = await supabase.auth.getSession()
+        if (!data.session) {
+          const { error: authError } = await supabase.auth.signInAnonymously()
+          if (authError) throw authError
+        }
+
+        const { data: links, error: linkError } = await supabase
+          .from('household_users')
+          .select('household_id, member_id')
+        if (linkError) throw linkError
+
+        const remembered = readHousehold()
+        const link =
+          links?.find((l) => l.household_id === remembered) ?? links?.[0] ?? null
+
+        if (!cancelled && link) {
+          setHouseholdId(link.household_id)
+          setActiveId(link.member_id)
+          rememberHousehold(link.household_id)
+          await fetchRows(link.household_id)
+        }
+      } catch (e) {
+        if (!cancelled) setError(e.message ?? String(e))
+      } finally {
+        if (!cancelled) setReady(true)
+      }
+    }
+
+    boot()
+    return () => {
+      cancelled = true
+    }
+  }, [fetchRows])
+
+  useEffect(() => {
+    if (!householdId) return
+
+    const filter = `household_id=eq.${householdId}`
+    const channel = supabase.channel(`household:${householdId}`)
+
+    for (const table of ['habit_checks', 'redemptions', 'tier_claims', 'members']) {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table, filter }, () =>
+        scheduleRefetch(householdId)
+      )
+    }
+
+    channel.subscribe()
+    return () => {
+      clearTimeout(refetchTimer.current)
+      supabase.removeChannel(channel)
+    }
+  }, [householdId, scheduleRefetch])
+
+  // Coming back to the app can mean a new day, and a stale board.
+  useEffect(() => {
+    const check = () => {
+      setToday(dayKey())
+      if (householdId) fetchRows(householdId)
+    }
+    window.addEventListener('focus', check)
+    document.addEventListener('visibilitychange', check)
+    return () => {
+      window.removeEventListener('focus', check)
+      document.removeEventListener('visibilitychange', check)
+    }
+  }, [householdId, fetchRows])
+
+  const view = useMemo(() => project(rows, today), [rows, today])
+
+  const start = useCallback(
+    async (names) => {
+      const { data, error: rpcError } = await supabase.rpc('create_household', {
+        p_names: names,
+      })
+      if (rpcError) return setError(rpcError.message)
+
+      const created = Array.isArray(data) ? data[0] : data
+      setHouseholdId(created.household_id)
+      rememberHousehold(created.household_id)
+      await fetchRows(created.household_id)
+
+      const { data: link } = await supabase
+        .from('household_users')
+        .select('member_id')
+        .eq('household_id', created.household_id)
+        .maybeSingle()
+      setActiveId(link?.member_id ?? null)
+    },
+    [fetchRows]
+  )
+
+  const join = useCallback(
+    async (code) => {
+      const { data, error: rpcError } = await supabase.rpc('join_household', {
+        p_code: code,
+      })
+      if (rpcError) return setError(rpcError.message)
+
+      setHouseholdId(data)
+      rememberHousehold(data)
+      setActiveId(null)
+      await fetchRows(data)
+    },
+    [fetchRows]
+  )
+
+  // After joining by code you pick which of the two players you are.
+  const pickMember = useCallback(
+    async (memberId) => {
+      setActiveId(memberId)
+      const { error: updateError } = await supabase
+        .from('household_users')
+        .update({ member_id: memberId })
+        .eq('household_id', householdId)
+      if (updateError) setError(updateError.message)
+    },
+    [householdId]
+  )
+
+  const toggleHabit = useCallback(
+    async (habit) => {
+      if (!householdId || !activeId) return
+
+      const checkedToday = view.grind.done[activeId]?.includes(habit.id)
+
+      // Unchecking claws points back out of the shared bank, so it has to cover them.
+      if (checkedToday && view.balance < habit.points) return
+
+      if (checkedToday) {
+        const { error: deleteError } = await supabase
+          .from('habit_checks')
+          .delete()
+          .match({
+            household_id: householdId,
+            member_id: activeId,
+            habit_id: habit.id,
+            day: today,
+          })
+        if (deleteError) setError(deleteError.message)
+      } else {
+        const { error: insertError } = await supabase.from('habit_checks').insert({
+          household_id: householdId,
+          member_id: activeId,
+          habit_id: habit.id,
+          title: habit.title,
+          day: today,
+          points: habit.points,
+        })
+        if (insertError) setError(insertError.message)
+      }
+
+      fetchRows(householdId)
+    },
+    [householdId, activeId, today, view, fetchRows]
+  )
+
+  const redeem = useCallback(
+    async (reward) => {
+      if (!householdId) return
+      const { error: rpcError } = await supabase.rpc('redeem_reward', {
+        p_household: householdId,
+        p_member: activeId,
+        p_reward_id: reward.id,
+        p_title: reward.title,
+        p_cost: reward.cost,
+        p_icon: reward.icon,
+        p_hue: reward.hue,
+        p_tier: reward.tier,
+      })
+      if (rpcError) setError(rpcError.message)
+      fetchRows(householdId)
+    },
+    [householdId, activeId, fetchRows]
+  )
+
+  const claimTier = useCallback(
+    async (tier) => {
+      if (!householdId) return
+      const { error: rpcError } = await supabase.rpc('claim_tier', {
+        p_household: householdId,
+        p_tier: tier.n,
+        p_xp_required: tier.xp,
+        p_bonus: tier.type === 'bonus' ? tier.value : 0,
+        p_member: activeId,
+      })
+      if (rpcError) setError(rpcError.message)
+      fetchRows(householdId)
+    },
+    [householdId, activeId, fetchRows]
+  )
+
+  return {
+    mode: 'cloud',
+    ready,
+    error,
+    ...view,
+    // No household yet, or joined but haven't said who you are.
+    members: householdId ? view.members : null,
+    activeId,
+    start,
+    join,
+    pickMember,
+    switchMember: setActiveId,
+    toggleHabit,
+    redeem,
+    claimTier,
+  }
+}

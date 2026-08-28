@@ -6,23 +6,22 @@ both agreed on ahead of time.
 
 ## How it works
 
-1. **Daily Grind** - Both of us see the same habit list (workouts, meal prep,
-   laundry). Checking a task off credits points.
-2. **Shared Bank** - Every completed task feeds a single pooled balance. There
-   is no "my points" and "your points."
-3. **Store** - Browse rewards like a storefront and spend pooled points instead
-   of dollars.
-4. **Redeemed** - Purchased rewards land here as a running list of things we
-   still owe ourselves.
+1. **Daily Grind** - You each keep your own checklist. If you both did it, you
+   both check it and you both get paid.
+2. **Shared bank** - Everything either of you earns lands in one pooled
+   balance. Personal totals are a record of who contributed, not a wallet.
+3. **Season Pass** - Points earned are season XP. Twelve tiers hand out bonus
+   points or agreed-on real-world perks. Spending never costs track progress.
+4. **Store** - Spend the shared bank on the reward catalog.
+5. **Receipts** - What was redeemed, when, and by whom.
 
-## Stack
+## Two modes
 
-- React 18
-- Vite
-- Plain CSS with CSS Grid for the responsive layouts
+The app runs either **local-only** (everything in this browser, no sync) or
+**synced** through Supabase, where both phones share one board. Which one you
+get depends purely on whether Supabase credentials are configured.
 
-No UI framework and no external image assets. Product art is generated from CSS
-gradients so the app works fully offline.
+Local-only is the default and needs no setup.
 
 ## Running it
 
@@ -31,8 +30,6 @@ npm install
 npm run dev
 ```
 
-Then open the URL Vite prints (default `http://localhost:5173`).
-
 Other scripts:
 
 ```bash
@@ -40,55 +37,100 @@ npm run build     # production bundle into dist/
 npm run preview   # serve the built bundle locally
 ```
 
+## Setting up sync (Supabase)
+
+Both phones need to read and write the same board, which needs a database.
+This is the whole setup:
+
+1. **Create a project** at [supabase.com](https://supabase.com) (free tier is
+   fine). Pick a region near you.
+2. **Run the schema.** Open the project's SQL Editor, paste all of
+   `supabase/schema.sql`, and run it. It creates the tables, the row-level
+   security policies, and the functions the app calls.
+3. **Turn on anonymous sign-ins.** Authentication -> Sign In / Providers ->
+   enable *Anonymous sign-ins*. Devices never make an account; they get an
+   anonymous identity that is tied to your household.
+4. **Copy the credentials.** Project Settings -> Data API for the project URL,
+   and Project Settings -> API Keys for the publishable (anon) key.
+5. **Add them locally.** Copy `.env.example` to `.env.local` and fill both in:
+
+   ```
+   VITE_SUPABASE_URL=https://your-project.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-publishable-key
+   ```
+
+6. **Restart the dev server** so Vite picks up the new env file.
+7. **Start the board on one phone** - enter both names, and the app shows a
+   six-character household code.
+8. **Join from the other phone** - "Join with a code", enter it, then pick
+   which player you are.
+
+To put it on both actual phones you also need to deploy it (Vercel, Netlify,
+and Cloudflare Pages all build this repo as-is). Set the same two environment
+variables in the host's dashboard.
+
+### How the data model avoids losing points
+
+Nothing stores a balance. Every point is derived from rows:
+
+```
+balance = seed_balance + habit points + claimed tier bonuses - redemptions
+```
+
+A check-off is one row, so two phones checking things off at the same moment
+insert two rows instead of overwriting each other's totals. Spending goes
+through `redeem_reward` / `claim_tier`, which re-check the balance server-side
+inside the transaction, so a double redemption can't overdraw.
+
+Row-level security limits every table to households the signed-in device has
+joined, and the household code is only usable through the `join_household`
+function.
+
+## Stack
+
+- React 18 + Vite
+- Plain CSS driven by a design-token layer (`src/theme/themes.js`)
+- Supabase (Postgres, anonymous auth, realtime) for the synced mode
+
 ## Project layout
 
 ```
 src/
-  main.jsx                 entry point
-  App.jsx                  tab routing, shared balance, redeem handler
-  index.css                global styles and grid breakpoints
-  data/rewards.js          reward catalog (mock data)
-  components/
-    Header.jsx             brand, tab nav, live bank counter
-    Storefront.jsx         tier filters and the product grid
-    RewardCard.jsx         single product card
-    Redeemed.jsx           purchase history
-    DailyGrind.jsx         habit list (not built yet)
+  App.jsx                  shell, tab routing, setup gating
+  index.css                tokens, components, motion, breakpoints
+  game/
+    useGame.js             picks the backend at build time
+    localBackend.js        device-only state (localStorage)
+    cloudBackend.js        Supabase reads, writes and realtime
+  lib/
+    supabase.js            client + hasCloud flag
+    day.js                 local-date keys, streak math
+    storage.js             local persistence
+    useCountUp.js          rolling number animation
+  theme/                   token definitions + provider
+  data/                    rewards, habits, season track
+  components/              UI
+supabase/schema.sql        tables, RLS policies, functions
 ```
 
-## Responsive grid
+## Theming
 
-The storefront grid steps up with viewport width:
+Five themes ship in `src/theme/themes.js`: Sticker Club, Notepad, Blueprint,
+Matcha and Night Light. Every color, radius and font in the app resolves to a
+token, so adding a theme is one entry in that file and no CSS changes.
 
-| Width    | Columns |
-| -------- | ------- |
-| < 640px  | 1       |
-| >= 640px | 2       |
-| >= 900px | 3       |
-| >= 1280px| 4       |
+## Editing the catalogs
 
-The top bar reflows from a stacked layout on phones to a single row at 900px.
+- `src/data/rewards.js` - the store. Each entry needs `id`, `title`,
+  `description`, `cost`, `tier`, `icon` and `hue`.
+- `src/data/habits.js` - daily and bonus habits and their point values.
+- `src/data/season.js` - the twelve season tiers.
 
-## Rewards
+Icons come from the stroke set in `src/components/Icon.jsx`; add a path there
+to use a new one.
 
-Rewards are grouped into three tiers that drive the badge color and the rough
-cost band:
+## Still to do
 
-- **Common** - everyday treats (80 to 260 points)
-- **Rare** - real outings (500 to 1400 points)
-- **Legendary** - big ticket trips (2500 to 5000 points)
-
-Edit `src/data/rewards.js` to change the catalog. Each entry needs an `id`,
-`title`, `description`, `cost`, `tier`, `emoji`, and an `art` gradient string.
-
-## Current state
-
-The storefront, the reward catalog, the redeem flow, and the redeemed list all
-work. The balance starts seeded in `src/App.jsx` so the store is explorable
-before habits exist.
-
-Still to do:
-
-- Build the habit checklist so points are actually earned
-- Persist state so both phones read and write the same bank
-- Streaks and season resets
+- Offline queueing, so a check-off made with no signal syncs when it returns
+- Editing habits and rewards in the app instead of in code
+- Season end and rollover into Season 2
