@@ -1,7 +1,8 @@
 import Icon from './Icon'
 import Window from './Window'
 
-export default function Redeemed({ redeemed }) {
+export default function Redeemed({ redeemed, members }) {
+  const nameFor = (id) => members.find((m) => m.id === id)?.name
   const spent = redeemed.reduce((sum, r) => sum + r.cost, 0)
 
   return (
@@ -35,6 +36,7 @@ export default function Redeemed({ redeemed }) {
                     hour: 'numeric',
                     minute: '2-digit',
                   })}
+                  {nameFor(item.by) && ` · ${nameFor(item.by)}`}
                 </span>
               </div>
               <span className="receipt__cost">-{item.cost.toLocaleString()}</span>

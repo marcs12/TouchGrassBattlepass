@@ -1114,6 +1114,110 @@ h3 {
   margin-top: 8px;
 }
 
+/* ---------- setup / profiles ---------- */
+
+.app__main--setup {
+  max-width: 560px;
+}
+
+.setup {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+  max-width: 340px;
+}
+
+.field {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  width: 100%;
+}
+
+.input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 13px;
+  border-radius: var(--radius-md);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+.input:focus-visible {
+  outline: var(--border-w) solid var(--ink);
+  outline-offset: 2px;
+}
+
+.profile__btn {
+  padding-left: 8px;
+}
+
+.profile__avatar {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ---------- scoreboard ---------- */
+
+.scoreboard {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin-bottom: 18px;
+}
+
+.score {
+  display: grid;
+  gap: 1px;
+  padding: 11px 14px;
+  border-radius: var(--radius-md);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface);
+}
+
+.score--you {
+  background: var(--surface-2);
+}
+
+.score--bank {
+  background: var(--bar-2);
+}
+
+.score__value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: var(--display-weight);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.score__unit {
+  margin: 0;
+}
+
 /* ---------- breakpoints ---------- */
 
 /* four tabs stop fitting their full labels before they stop fitting at all */
@@ -1124,6 +1228,13 @@ h3 {
 
   .tab__label--short {
     display: inline;
+  }
+}
+
+/* three chips now share the menubar; the brand text yields first */
+@media (max-width: 520px) {
+  .brand__id {
+    display: none;
   }
 }
 

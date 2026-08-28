@@ -4,6 +4,7 @@ import Storefront from './components/Storefront'
 import Redeemed from './components/Redeemed'
 import DailyGrind from './components/DailyGrind'
 import SeasonPass from './components/SeasonPass'
+import Setup from './components/Setup'
 import { ThemeProvider } from './theme/ThemeProvider'
 import { DAILY_HABITS } from './data/habits'
 import { dayKey } from './lib/day'
@@ -14,12 +15,18 @@ import { loadState, saveState } from './lib/storage'
 const STARTING_BALANCE = 2750
 
 const freshState = () => ({
+  // Set during setup - two people share one board.
+  members: null,
+  activeId: null,
   balance: STARTING_BALANCE,
+  // Lifetime points contributed per member. These are a record of who put the
+  // work in, not a wallet: spending only ever comes out of the shared bank.
+  earned: {},
   redeemed: [],
-  // `done` is today's checklist; `goalDates` is every day the full daily list
-  // was cleared, which is what the streak is derived from.
-  grind: { date: dayKey(), done: [], goalDates: [] },
-  // Season XP counts points *earned*, so store spending never costs progress.
+  // Each member keeps their own checklist and their own goal history, so both
+  // can tick the same habit on the same day and both get paid.
+  grind: { date: dayKey(), done: {}, goalDates: {} },
+  // Season XP is the couple's combined earnings.
   season: { xp: 0, claimed: [] },
 })
 
@@ -29,22 +36,24 @@ const normalize = (state) => {
   return {
     ...base,
     ...state,
+    earned: { ...base.earned, ...state.earned },
     grind: { ...base.grind, ...state.grind },
     season: { ...base.season, ...state.season },
   }
 }
 
-// A stored day that isn't today gets a clean checklist; the goal history stays.
+// A stored day that isn't today gets clean checklists; the goal history stays.
 const rollOver = (state, today = dayKey()) =>
   state.grind.date === today
     ? state
-    : { ...state, grind: { ...state.grind, date: today, done: [] } }
+    : { ...state, grind: { ...state.grind, date: today, done: {} } }
 
 export default function App() {
   const [state, setState] = useState(() =>
     rollOver(normalize(loadState() ?? freshState()))
   )
-  const { balance, redeemed, grind, season } = state
+  const [tab, setTab] = useState('grind')
+  const { members, activeId, balance, earned, redeemed, grind, season } = state
 
   useEffect(() => {
     saveState(state)
@@ -61,6 +70,29 @@ export default function App() {
     }
   }, [])
 
+  const handleStart = useCallback((names) => {
+    setState((prev) => {
+      const roster = names.map((name, i) => ({ id: `p${i + 1}`, name }))
+      const first = roster[0].id
+      return {
+        ...prev,
+        members: roster,
+        activeId: first,
+        earned: Object.fromEntries(roster.map((m) => [m.id, 0])),
+        grind: {
+          ...prev.grind,
+          // A v1 save carried one anonymous list; hand it to player one.
+          done: { [first]: prev.grind.done.legacy ?? [] },
+          goalDates: { [first]: prev.grind.goalDates.legacy ?? [] },
+        },
+      }
+    })
+  }, [])
+
+  const handleSwitch = useCallback((id) => {
+    setState((prev) => ({ ...prev, activeId: id }))
+  }, [])
+
   const handleRedeem = useCallback((reward) => {
     setState((prev) => {
       if (prev.balance < reward.cost) return prev
@@ -72,6 +104,7 @@ export default function App() {
             ...reward,
             receiptId: `${reward.id}-${Date.now()}`,
             redeemedAt: Date.now(),
+            by: prev.activeId,
           },
           ...prev.redeemed,
         ],
@@ -81,16 +114,18 @@ export default function App() {
 
   const handleToggleHabit = useCallback((habit) => {
     setState((prev) => {
-      const done = new Set(prev.grind.done)
+      const who = prev.activeId
+      const done = new Set(prev.grind.done[who] ?? [])
       const undoing = done.has(habit.id)
 
-      // Unchecking claws the points back, so the bank has to cover them.
+      // Unchecking claws the points back out of the shared bank, so it has to
+      // be able to cover them.
       if (undoing && prev.balance < habit.points) return prev
 
       if (undoing) done.delete(habit.id)
       else done.add(habit.id)
 
-      const goalDates = new Set(prev.grind.goalDates)
+      const goalDates = new Set(prev.grind.goalDates[who] ?? [])
       if (DAILY_HABITS.every((h) => done.has(h.id))) goalDates.add(prev.grind.date)
       else goalDates.delete(prev.grind.date)
 
@@ -99,9 +134,17 @@ export default function App() {
       return {
         ...prev,
         balance: prev.balance + delta,
-        grind: { ...prev.grind, done: [...done], goalDates: [...goalDates] },
-        // XP tracks earnings, so it moves with the check - but an already
-        // claimed tier stays claimed even if XP dips back under its threshold.
+        earned: {
+          ...prev.earned,
+          [who]: Math.max(0, (prev.earned[who] ?? 0) + delta),
+        },
+        grind: {
+          ...prev.grind,
+          done: { ...prev.grind.done, [who]: [...done] },
+          goalDates: { ...prev.grind.goalDates, [who]: [...goalDates] },
+        },
+        // XP tracks the couple's earnings, so it moves with every check - but
+        // an already claimed tier stays claimed even if XP dips back under it.
         season: { ...prev.season, xp: Math.max(0, prev.season.xp + delta) },
       }
     })
@@ -121,7 +164,17 @@ export default function App() {
     })
   }, [])
 
-  const [tab, setTab] = useState('grind')
+  if (!members) {
+    return (
+      <ThemeProvider>
+        <div className="app">
+          <main className="app__main app__main--setup">
+            <Setup onStart={handleStart} />
+          </main>
+        </div>
+      </ThemeProvider>
+    )
+  }
 
   return (
     <ThemeProvider>
@@ -131,12 +184,19 @@ export default function App() {
           tab={tab}
           onTab={setTab}
           redeemedCount={redeemed.length}
+          members={members}
+          activeId={activeId}
+          earned={earned}
+          onSwitch={handleSwitch}
         />
 
         <main className="app__main">
           {tab === 'grind' && (
             <DailyGrind
               grind={grind}
+              members={members}
+              activeId={activeId}
+              earned={earned}
               balance={balance}
               onToggleHabit={handleToggleHabit}
             />
@@ -151,7 +211,9 @@ export default function App() {
               onRedeem={handleRedeem}
             />
           )}
-          {tab === 'redeemed' && <Redeemed redeemed={redeemed} />}
+          {tab === 'redeemed' && (
+            <Redeemed redeemed={redeemed} members={members} />
+          )}
         </main>
       </div>
     </ThemeProvider>

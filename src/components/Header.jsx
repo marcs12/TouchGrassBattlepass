@@ -1,5 +1,6 @@
 import Icon from './Icon'
 import ThemePicker from './ThemePicker'
+import ProfileSwitcher from './ProfileSwitcher'
 
 // `short` keeps four tabs on one line once the labels stop fitting.
 const TABS = [
@@ -9,7 +10,16 @@ const TABS = [
   { id: 'redeemed', label: 'Redeemed', short: 'Receipts', icon: 'receipt' },
 ]
 
-export default function Header({ balance, tab, onTab, redeemedCount }) {
+export default function Header({
+  balance,
+  tab,
+  onTab,
+  redeemedCount,
+  members,
+  activeId,
+  earned,
+  onSwitch,
+}) {
   return (
     <header className="menubar">
       <div className="brand">
@@ -42,6 +52,12 @@ export default function Header({ balance, tab, onTab, redeemedCount }) {
       </nav>
 
       <div className="menubar__right">
+        <ProfileSwitcher
+          members={members}
+          activeId={activeId}
+          earned={earned}
+          onSwitch={onSwitch}
+        />
         <ThemePicker />
         <div className="bank">
           <span className="bank__label label">Shared bank</span>

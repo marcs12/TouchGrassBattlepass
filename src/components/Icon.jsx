@@ -162,6 +162,22 @@ const PATHS = {
     </>
   ),
 
+  moped: (
+    <>
+      <circle cx="6" cy="16.5" r="3" />
+      <circle cx="18" cy="16.5" r="3" />
+      <path d="M9 16.5h6M15 16.5l-1.8-7.2H10" />
+      <path d="M13.2 9.3h4.3l1.6 6.2" />
+      <path d="M17.5 6.2h2.6" />
+    </>
+  ),
+  bag: (
+    <>
+      <path d="M5.4 8h13.2l1 12.2H4.4z" />
+      <path d="M8.6 10.5V7.2a3.4 3.4 0 0 1 6.8 0v3.3" />
+    </>
+  ),
+
   // ui chrome
   leaf: (
     <>

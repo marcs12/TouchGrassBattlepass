@@ -1,6 +1,7 @@
 import { BONUS_HABITS, DAILY_HABITS, DAILY_GOAL } from '../data/habits'
 import { recentDays, streakFrom } from '../lib/day'
 import Icon from './Icon'
+import Scoreboard from './Scoreboard'
 import Window from './Window'
 
 const STRIP_DAYS = 7
@@ -47,9 +48,21 @@ function HabitRow({ habit, done, blocked, onToggle }) {
   )
 }
 
-export default function DailyGrind({ grind, balance, onToggleHabit }) {
-  const done = new Set(grind.done)
-  const earned = [...DAILY_HABITS, ...BONUS_HABITS]
+export default function DailyGrind({
+  grind,
+  members,
+  activeId,
+  earned,
+  balance,
+  onToggleHabit,
+}) {
+  const active = members.find((m) => m.id === activeId) ?? members[0]
+  const partner = members.find((m) => m.id !== active.id)
+
+  const done = new Set(grind.done[active.id] ?? [])
+  const partnerDone = new Set((partner && grind.done[partner.id]) ?? [])
+
+  const banked = [...DAILY_HABITS, ...BONUS_HABITS]
     .filter((h) => done.has(h.id))
     .reduce((sum, h) => sum + h.points, 0)
 
@@ -59,10 +72,12 @@ export default function DailyGrind({ grind, balance, onToggleHabit }) {
     0
   )
   const goalProgress = Math.min(100, Math.round((dailyEarned / DAILY_GOAL) * 100))
-  const streak = streakFrom(grind.goalDates, grind.date)
-  const hit = new Set(grind.goalDates)
 
-  // Unchecking refunds points, which the bank has to be able to cover.
+  const goalDates = grind.goalDates[active.id] ?? []
+  const streak = streakFrom(goalDates, grind.date)
+  const hit = new Set(goalDates)
+
+  // Unchecking refunds points, which the shared bank has to be able to cover.
   const canUndo = (habit) => !done.has(habit.id) || balance >= habit.points
 
   const rowProps = (habit) => ({
@@ -78,24 +93,21 @@ export default function DailyGrind({ grind, balance, onToggleHabit }) {
         <div>
           <h2 className="store__title">Daily Grind</h2>
           <p className="store__sub">
-            Check something off and the points land in the shared bank. The
-            daily list resets at midnight; bonus jobs are there whenever you
-            get to them.
+            You each keep your own list — if you both did it, you both check it
+            and you both get paid. Everything lands in the shared bank.
           </p>
         </div>
 
         <div className="nextup">
-          <p className="label">Today</p>
-          <p className="nextup__title">
-            {earned.toLocaleString()} pts banked
-          </p>
+          <p className="label">Today · {active.name}</p>
+          <p className="nextup__title">{banked.toLocaleString()} pts banked</p>
           <div
             className="meter"
             role="progressbar"
             aria-valuenow={goalProgress}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-label="Progress toward today's full daily list"
+            aria-label={`${active.name}'s progress toward the full daily list`}
           >
             <span style={{ width: `${goalProgress}%` }} />
           </div>
@@ -104,14 +116,31 @@ export default function DailyGrind({ grind, balance, onToggleHabit }) {
               {dailyDone}/{DAILY_HABITS.length}
             </strong>{' '}
             daily done
+            {partner && (
+              <>
+                {' · '}
+                {partner.name}{' '}
+                <strong>
+                  {DAILY_HABITS.filter((h) => partnerDone.has(h.id)).length}/
+                  {DAILY_HABITS.length}
+                </strong>
+              </>
+            )}
           </p>
         </div>
       </header>
 
+      <Scoreboard
+        members={members}
+        activeId={active.id}
+        earned={earned}
+        balance={balance}
+      />
+
       <div className="streak">
         <span className="streak__count">
           <Icon name="flame" size={18} strokeWidth="1.9" />
-          <strong>{streak}</strong> day streak
+          <strong>{streak}</strong> day streak · {active.name}
         </span>
         <ol className="streak__strip">
           {recentDays(STRIP_DAYS, grind.date).map((key) => {
