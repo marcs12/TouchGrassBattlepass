@@ -1338,6 +1338,172 @@ h3 {
   white-space: nowrap;
 }
 
+/* ---------- motion ---------- */
+
+/* Durations stay short and every animation is transform/opacity only, so
+   nothing reflows mid-flight. The reduced-motion rule at the bottom of this
+   file clamps all of it. */
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes stamp {
+  0% {
+    transform: scale(0.4) rotate(-12deg);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.18) rotate(3deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes badge-pop {
+  0% {
+    transform: scale(0.5);
+  }
+  65% {
+    transform: scale(1.25);
+  }
+}
+
+@keyframes float-up {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.9);
+  }
+  25% {
+    opacity: 1;
+    transform: translate(-50%, 2px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -10px) scale(1);
+  }
+}
+
+.view {
+  animation: view-in 0.22s var(--ease) both;
+}
+
+.themer__menu {
+  transform-origin: top right;
+  animation: pop-in 0.16s var(--ease) both;
+}
+
+/* The check mark stamps itself in when a habit or tier is completed. */
+.habit--done .habit__box svg,
+.tier--claimed .tier__btn svg,
+.streak__day--hit .streak__dot svg {
+  animation: stamp 0.28s var(--ease) both;
+}
+
+.tab__badge {
+  animation: badge-pop 0.3s var(--ease) both;
+}
+
+/* Points landing in (or leaving) the shared bank, floated off the chip. The
+   chip sits at the top of a sticky bar, so this hangs below it - above would
+   be clipped by the viewport edge. */
+.bank {
+  position: relative;
+}
+
+.bank__pop {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  z-index: 1;
+  padding: 2px 9px;
+  border-radius: var(--pill);
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+  box-shadow: 2px 2px 0 var(--shadow-color);
+  pointer-events: none;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: var(--display-weight);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  animation: float-up 0.9s var(--ease) both;
+}
+
+.bank__pop--down {
+  color: var(--danger);
+}
+
+/* Lists arrive in a short cascade - only on mount, never on re-render. */
+.grid > .card,
+.habits__list > li,
+.log__row,
+.receipt {
+  animation: row-in 0.26s var(--ease) both;
+}
+
+.grid > .card:nth-child(1),
+.habits__list > li:nth-child(1),
+.log__row:nth-child(1),
+.receipt:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.grid > .card:nth-child(2),
+.habits__list > li:nth-child(2),
+.log__row:nth-child(2),
+.receipt:nth-child(2) {
+  animation-delay: 30ms;
+}
+
+.grid > .card:nth-child(3),
+.habits__list > li:nth-child(3),
+.log__row:nth-child(3),
+.receipt:nth-child(3) {
+  animation-delay: 60ms;
+}
+
+.grid > .card:nth-child(4),
+.habits__list > li:nth-child(4),
+.log__row:nth-child(4),
+.receipt:nth-child(4) {
+  animation-delay: 90ms;
+}
+
+.grid > .card:nth-child(5),
+.habits__list > li:nth-child(5),
+.log__row:nth-child(5),
+.receipt:nth-child(5) {
+  animation-delay: 120ms;
+}
+
+.grid > .card:nth-child(n + 6),
+.habits__list > li:nth-child(n + 6),
+.log__row:nth-child(n + 6),
+.receipt:nth-child(n + 6) {
+  animation-delay: 150ms;
+}
+
 /* ---------- breakpoints ---------- */
 
 /* four tabs stop fitting their full labels before they stop fitting at all */

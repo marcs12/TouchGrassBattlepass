@@ -1,7 +1,12 @@
+import { useCountUp } from '../lib/useCountUp'
 import Icon from './Icon'
 
 // Who put in what, and what's left to spend. Personal totals are lifetime
 // contributions - they never go down when the shared bank is spent.
+function Rolling({ value }) {
+  return <>{useCountUp(value).toLocaleString()}</>
+}
+
 export default function Scoreboard({
   members,
   activeId,
@@ -25,7 +30,9 @@ export default function Scoreboard({
               {m.name}
               {m.id === activeId && ' · you'}
             </p>
-            <p className="score__value">{(earned[m.id] ?? 0).toLocaleString()}</p>
+            <p className="score__value">
+              <Rolling value={earned[m.id] ?? 0} />
+            </p>
             <p className="score__unit label">
               pts contributed
               {(today[m.id] ?? 0) > 0 && (
@@ -41,7 +48,7 @@ export default function Scoreboard({
           <p className="label">Shared bank</p>
           <p className="score__value">
             <Icon name="coin" size={16} strokeWidth="1.9" />
-            {balance.toLocaleString()}
+            <Rolling value={balance} />
           </p>
           <p className="score__unit label">to spend</p>
         </div>

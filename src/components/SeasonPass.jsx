@@ -1,4 +1,5 @@
 import { SEASON, TIERS_TRACK, nextTier, tierAt } from '../data/season'
+import { useCountUp } from '../lib/useCountUp'
 import Icon from './Icon'
 import Window from './Window'
 
@@ -49,6 +50,7 @@ function Tier({ tier, xp, claimed, onClaim }) {
 
 export default function SeasonPass({ season, onClaimTier }) {
   const xp = season.xp
+  const shownXp = useCountUp(xp)
   const claimed = new Set(season.claimed)
   const current = tierAt(xp)
   const next = nextTier(xp)
@@ -77,7 +79,9 @@ export default function SeasonPass({ season, onClaimTier }) {
 
         <div className="nextup">
           <p className="label">{current === 0 ? 'Not started' : `Tier ${current}`}</p>
-          <p className="nextup__title">{xp.toLocaleString()} XP earned</p>
+          <p className="nextup__title">
+            {shownXp.toLocaleString()} XP earned
+          </p>
           <div
             className="meter"
             role="progressbar"
