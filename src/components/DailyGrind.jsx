@@ -1,6 +1,7 @@
 import { BONUS_HABITS, DAILY_HABITS, DAILY_GOAL } from '../data/habits'
 import { recentDays, streakFrom } from '../lib/day'
 import Icon from './Icon'
+import ContributionLog from './ContributionLog'
 import Scoreboard from './Scoreboard'
 import Window from './Window'
 
@@ -48,12 +49,30 @@ function HabitRow({ habit, done, blocked, onToggle }) {
   )
 }
 
+const ALL_HABITS = [...DAILY_HABITS, ...BONUS_HABITS]
+
+// What each member has banked today, from their own checklist.
+const bankedToday = (members, done) =>
+  Object.fromEntries(
+    members.map((m) => {
+      const checked = new Set(done[m.id] ?? [])
+      return [
+        m.id,
+        ALL_HABITS.filter((h) => checked.has(h.id)).reduce(
+          (sum, h) => sum + h.points,
+          0
+        ),
+      ]
+    })
+  )
+
 export default function DailyGrind({
   grind,
   members,
   activeId,
   earned,
   balance,
+  log,
   onToggleHabit,
 }) {
   const active = members.find((m) => m.id === activeId) ?? members[0]
@@ -62,9 +81,8 @@ export default function DailyGrind({
   const done = new Set(grind.done[active.id] ?? [])
   const partnerDone = new Set((partner && grind.done[partner.id]) ?? [])
 
-  const banked = [...DAILY_HABITS, ...BONUS_HABITS]
-    .filter((h) => done.has(h.id))
-    .reduce((sum, h) => sum + h.points, 0)
+  const today = bankedToday(members, grind.done)
+  const banked = today[active.id] ?? 0
 
   const dailyDone = DAILY_HABITS.filter((h) => done.has(h.id)).length
   const dailyEarned = DAILY_HABITS.filter((h) => done.has(h.id)).reduce(
@@ -134,6 +152,7 @@ export default function DailyGrind({
         members={members}
         activeId={active.id}
         earned={earned}
+        today={today}
         balance={balance}
       />
 
@@ -183,6 +202,8 @@ export default function DailyGrind({
           ))}
         </ul>
       </section>
+
+      <ContributionLog log={log} members={members} />
     </Window>
   )
 }

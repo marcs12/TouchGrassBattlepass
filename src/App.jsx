@@ -28,7 +28,11 @@ const freshState = () => ({
   grind: { date: dayKey(), done: {}, goalDates: {} },
   // Season XP is the couple's combined earnings.
   season: { xp: 0, claimed: [] },
+  // Running record of who banked what, newest first.
+  log: [],
 })
+
+const LOG_LIMIT = 40
 
 // Stored state can predate a field, so fill the gaps rather than throwing it out.
 const normalize = (state) => {
@@ -37,6 +41,7 @@ const normalize = (state) => {
     ...base,
     ...state,
     earned: { ...base.earned, ...state.earned },
+    log: state.log ?? base.log,
     grind: { ...base.grind, ...state.grind },
     season: { ...base.season, ...state.season },
   }
@@ -53,7 +58,8 @@ export default function App() {
     rollOver(normalize(loadState() ?? freshState()))
   )
   const [tab, setTab] = useState('grind')
-  const { members, activeId, balance, earned, redeemed, grind, season } = state
+  const { members, activeId, balance, earned, redeemed, grind, season, log } =
+    state
 
   useEffect(() => {
     saveState(state)
@@ -130,9 +136,17 @@ export default function App() {
       else goalDates.delete(prev.grind.date)
 
       const delta = undoing ? -habit.points : habit.points
+      const entry = {
+        id: `${habit.id}-${who}-${Date.now()}`,
+        memberId: who,
+        label: undoing ? `${habit.title} (undone)` : habit.title,
+        points: delta,
+        at: Date.now(),
+      }
 
       return {
         ...prev,
+        log: [entry, ...prev.log].slice(0, LOG_LIMIT),
         balance: prev.balance + delta,
         earned: {
           ...prev.earned,
@@ -198,6 +212,7 @@ export default function App() {
               activeId={activeId}
               earned={earned}
               balance={balance}
+              log={log}
               onToggleHabit={handleToggleHabit}
             />
           )}

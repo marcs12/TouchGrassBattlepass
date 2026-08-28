@@ -1180,9 +1180,14 @@ h3 {
 
 .scoreboard {
   display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.scoreboard__tiles {
+  display: grid;
   gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  margin-bottom: 18px;
 }
 
 .score {
@@ -1216,6 +1221,121 @@ h3 {
 
 .score__unit {
   margin: 0;
+}
+
+.score__today {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-2);
+}
+
+/* Contribution split: one bar, one segment per member. */
+.split {
+  display: grid;
+  gap: 6px;
+}
+
+.split__bar {
+  display: flex;
+  overflow: hidden;
+  height: 16px;
+  border-radius: var(--radius-sm);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface-2);
+}
+
+.split__seg {
+  transition: width 0.35s var(--ease);
+}
+
+.split__seg[data-member='p1'],
+.split__key[data-member='p1'] i {
+  background: var(--accent);
+}
+
+.split__seg[data-member='p2'],
+.split__key[data-member='p2'] i {
+  background: var(--tier-medium);
+}
+
+.split__seg + .split__seg {
+  border-left: var(--border-w) solid var(--ink);
+}
+
+.split__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+}
+
+.split__key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.split__key i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  border: 1.5px solid var(--ink);
+}
+
+/* ---------- contribution log ---------- */
+
+.log {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.log__row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 13px;
+  border-radius: var(--radius-md);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface);
+}
+
+.log__meta {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.log__meta strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.log__label {
+  font-size: 13px;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log__points {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: var(--display-weight);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.log__points--undo {
+  color: var(--danger);
+}
+
+.log__time {
+  white-space: nowrap;
 }
 
 /* ---------- breakpoints ---------- */
@@ -1261,6 +1381,14 @@ h3 {
 
   .habit__art {
     display: none;
+  }
+
+  .log__time {
+    display: none;
+  }
+
+  .log__row {
+    grid-template-columns: auto 1fr auto;
   }
 
   .streak {
