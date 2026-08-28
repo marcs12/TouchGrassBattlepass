@@ -19,3 +19,6 @@ CLAUDE.md
 
 # os
 .DS_Store
+
+# design references (local only)
+.design-inspo
