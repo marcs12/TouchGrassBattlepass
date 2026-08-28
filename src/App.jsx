@@ -3,6 +3,7 @@ import Header from './components/Header'
 import Storefront from './components/Storefront'
 import Redeemed from './components/Redeemed'
 import DailyGrind from './components/DailyGrind'
+import SeasonPass from './components/SeasonPass'
 import { ThemeProvider } from './theme/ThemeProvider'
 import { DAILY_HABITS } from './data/habits'
 import { dayKey } from './lib/day'
@@ -18,7 +19,20 @@ const freshState = () => ({
   // `done` is today's checklist; `goalDates` is every day the full daily list
   // was cleared, which is what the streak is derived from.
   grind: { date: dayKey(), done: [], goalDates: [] },
+  // Season XP counts points *earned*, so store spending never costs progress.
+  season: { xp: 0, claimed: [] },
 })
+
+// Stored state can predate a field, so fill the gaps rather than throwing it out.
+const normalize = (state) => {
+  const base = freshState()
+  return {
+    ...base,
+    ...state,
+    grind: { ...base.grind, ...state.grind },
+    season: { ...base.season, ...state.season },
+  }
+}
 
 // A stored day that isn't today gets a clean checklist; the goal history stays.
 const rollOver = (state, today = dayKey()) =>
@@ -27,8 +41,10 @@ const rollOver = (state, today = dayKey()) =>
     : { ...state, grind: { ...state.grind, date: today, done: [] } }
 
 export default function App() {
-  const [state, setState] = useState(() => rollOver(loadState() ?? freshState()))
-  const { balance, redeemed, grind } = state
+  const [state, setState] = useState(() =>
+    rollOver(normalize(loadState() ?? freshState()))
+  )
+  const { balance, redeemed, grind, season } = state
 
   useEffect(() => {
     saveState(state)
@@ -78,10 +94,29 @@ export default function App() {
       if (DAILY_HABITS.every((h) => done.has(h.id))) goalDates.add(prev.grind.date)
       else goalDates.delete(prev.grind.date)
 
+      const delta = undoing ? -habit.points : habit.points
+
       return {
         ...prev,
-        balance: prev.balance + (undoing ? -habit.points : habit.points),
+        balance: prev.balance + delta,
         grind: { ...prev.grind, done: [...done], goalDates: [...goalDates] },
+        // XP tracks earnings, so it moves with the check - but an already
+        // claimed tier stays claimed even if XP dips back under its threshold.
+        season: { ...prev.season, xp: Math.max(0, prev.season.xp + delta) },
+      }
+    })
+  }, [])
+
+  const handleClaimTier = useCallback((tier) => {
+    setState((prev) => {
+      if (prev.season.xp < tier.xp) return prev
+      if (prev.season.claimed.includes(tier.n)) return prev
+
+      return {
+        ...prev,
+        balance:
+          tier.type === 'bonus' ? prev.balance + tier.value : prev.balance,
+        season: { ...prev.season, claimed: [...prev.season.claimed, tier.n] },
       }
     })
   }, [])
@@ -105,6 +140,9 @@ export default function App() {
               balance={balance}
               onToggleHabit={handleToggleHabit}
             />
+          )}
+          {tab === 'season' && (
+            <SeasonPass season={season} onClaimTier={handleClaimTier} />
           )}
           {tab === 'store' && (
             <Storefront

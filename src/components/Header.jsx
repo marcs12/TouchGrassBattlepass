@@ -1,10 +1,12 @@
 import Icon from './Icon'
 import ThemePicker from './ThemePicker'
 
+// `short` keeps four tabs on one line once the labels stop fitting.
 const TABS = [
-  { id: 'grind', label: 'Daily Grind', icon: 'target' },
-  { id: 'store', label: 'Store', icon: 'spark' },
-  { id: 'redeemed', label: 'Redeemed', icon: 'receipt' },
+  { id: 'grind', label: 'Daily Grind', short: 'Grind', icon: 'target' },
+  { id: 'season', label: 'Season Pass', short: 'Pass', icon: 'trophy' },
+  { id: 'store', label: 'Store', short: 'Store', icon: 'spark' },
+  { id: 'redeemed', label: 'Redeemed', short: 'Receipts', icon: 'receipt' },
 ]
 
 export default function Header({ balance, tab, onTab, redeemedCount }) {
@@ -31,6 +33,7 @@ export default function Header({ balance, tab, onTab, redeemedCount }) {
           >
             <Icon name={t.icon} size={16} />
             <span className="tab__label">{t.label}</span>
+            <span className="tab__label tab__label--short">{t.short}</span>
             {t.id === 'redeemed' && redeemedCount > 0 && (
               <span className="tab__badge">{redeemedCount}</span>
             )}

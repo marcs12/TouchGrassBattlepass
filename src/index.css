@@ -122,6 +122,9 @@ h3 {
 .app__main {
   width: 100%;
   max-width: 1180px;
+  /* grid item: without this the season track's content width leaks out and
+     forces the whole page wider than the viewport */
+  min-width: 0;
   margin: 0 auto;
   padding: 28px 16px 72px;
 }
@@ -231,6 +234,10 @@ h3 {
 
 .tab__label {
   white-space: nowrap;
+}
+
+.tab__label--short {
+  display: none;
 }
 
 .tab__badge {
@@ -382,6 +389,7 @@ h3 {
 /* ---------- window chrome ---------- */
 
 .win {
+  min-width: 0;
   overflow: hidden;
   border-radius: var(--radius-lg);
   border: var(--border-w) solid var(--ink);
@@ -417,6 +425,7 @@ h3 {
 }
 
 .win__body {
+  min-width: 0;
   padding: 20px 18px 24px;
 }
 
@@ -999,7 +1008,124 @@ h3 {
   color: var(--ink-3);
 }
 
+/* ---------- season pass ---------- */
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: var(--border-w) solid var(--ink);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* The track scrolls sideways; the page itself never does. */
+.track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(212px, 1fr);
+  gap: 14px;
+  margin: 0;
+  padding: 4px 4px 16px;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+}
+
+.tier {
+  /* fixed row track so every card's Claim button lines up across the row */
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto auto;
+  gap: 6px;
+  justify-items: start;
+  scroll-snap-align: start;
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--shadow-color);
+}
+
+.tier--locked {
+  border-style: dashed;
+  background: var(--surface-2);
+  box-shadow: none;
+}
+
+.tier--claimed {
+  background: var(--surface-2);
+}
+
+.tier__no {
+  margin: 0;
+}
+
+.tier__art {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 2px 0 4px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--ink);
+  background: var(--bar-2);
+  color: var(--ink);
+}
+
+.tier--ready .tier__art {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.tier--locked .tier__art {
+  color: var(--ink-3);
+  border-color: var(--ink-3);
+  background: var(--surface);
+}
+
+.tier__title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: var(--display-weight);
+  line-height: 1.2;
+}
+
+.tier__note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.tier__req {
+  margin: 2px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.tier__btn {
+  width: 100%;
+  justify-content: center;
+  margin-top: 8px;
+}
+
 /* ---------- breakpoints ---------- */
+
+/* four tabs stop fitting their full labels before they stop fitting at all */
+@media (max-width: 560px) {
+  .tab__label {
+    display: none;
+  }
+
+  .tab__label--short {
+    display: inline;
+  }
+}
 
 /* narrow phones - keep the tab row on one line */
 @media (max-width: 400px) {
