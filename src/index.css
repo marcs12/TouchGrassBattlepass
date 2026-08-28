@@ -804,6 +804,201 @@ h3 {
   white-space: nowrap;
 }
 
+/* ---------- daily grind ---------- */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.streak {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 22px;
+  padding: 11px 14px;
+  border-radius: var(--radius-md);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface-2);
+}
+
+.streak__count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.streak__count strong {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: var(--display-weight);
+  color: var(--ink);
+}
+
+.streak__strip {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.streak__day {
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+}
+
+.streak__dot {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface);
+  color: var(--accent-ink);
+}
+
+.streak__day--hit .streak__dot {
+  background: var(--accent);
+}
+
+.streak__day--today .streak__dot {
+  outline: var(--border-w) solid var(--ink);
+  outline-offset: 2px;
+}
+
+.streak__label {
+  font-family: var(--font-label);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.habits {
+  margin-top: 22px;
+}
+
+.habits__title {
+  margin: 0 0 10px;
+}
+
+.habits__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.habit {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  padding: 10px 13px;
+  border-radius: var(--radius-md);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface);
+  text-align: left;
+  transition: background 0.14s var(--ease), transform 0.1s var(--ease);
+}
+
+.habit:hover {
+  background: var(--surface-2);
+}
+
+.habit:active {
+  transform: translate(1px, 1px);
+}
+
+.habit--done {
+  background: var(--surface-2);
+}
+
+/* Checked, but the bank can no longer cover the refund. */
+.habit--blocked {
+  cursor: not-allowed;
+}
+
+.habit__lock {
+  color: var(--ink-3);
+}
+
+.habit__box {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface);
+  color: var(--accent-ink);
+}
+
+.habit--done .habit__box {
+  background: var(--accent);
+}
+
+.habit__art {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--ink);
+  background: hsl(var(--h) var(--art-s) var(--art-l));
+  color: var(--art-ink);
+}
+
+.habit__meta {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.habit__meta strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.habit__note {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+
+.habit__points {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: var(--display-weight);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.habit__unit {
+  font-family: var(--font-label);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
 /* ---------- breakpoints ---------- */
 
 /* narrow phones - keep the tab row on one line */
@@ -820,6 +1015,19 @@ h3 {
 
   .tab svg {
     display: none;
+  }
+
+  .habit {
+    gap: 11px;
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .habit__art {
+    display: none;
+  }
+
+  .streak {
+    justify-content: center;
   }
 }
 
