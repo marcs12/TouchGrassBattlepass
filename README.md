@@ -65,9 +65,24 @@ This is the whole setup:
 8. **Join from the other phone** - "Join with a code", enter it, then pick
    which player you are.
 
-To put it on both actual phones you also need to deploy it (Vercel, Netlify,
-and Cloudflare Pages all build this repo as-is). Set the same two environment
-variables in the host's dashboard.
+## Deploying (GitHub Pages)
+
+Pushing to `main` builds and publishes the app to GitHub Pages via
+`.github/workflows/deploy.yml`. Two one-time settings on the repo:
+
+1. **Settings -> Pages -> Build and deployment -> Source: GitHub Actions.**
+2. **Settings -> Secrets and variables -> Actions -> New repository secret**,
+   twice: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Without them the
+   deployed app still works, just in local-only mode with no sync.
+
+The site lands at `https://<user>.github.io/TouchGrassBattlepass/`. That
+sub-path is why `vite.config.js` sets `base`; set `BASE_PATH=/` when building
+for a host that serves the app at the root instead.
+
+Vite inlines those two variables into the bundle, so the anon key is visible to
+anyone who views source. That is what the publishable key is for - row-level
+security is what actually protects the data. Never put a `service_role` key in
+the workflow.
 
 ### How the data model avoids losing points
 
