@@ -1,17 +1,22 @@
+import Icon from './Icon'
+import ThemePicker from './ThemePicker'
+
 const TABS = [
-  { id: 'grind', label: 'Daily Grind' },
-  { id: 'store', label: 'Store' },
-  { id: 'redeemed', label: 'Redeemed' },
+  { id: 'grind', label: 'Daily Grind', icon: 'target' },
+  { id: 'store', label: 'Store', icon: 'spark' },
+  { id: 'redeemed', label: 'Redeemed', icon: 'receipt' },
 ]
 
 export default function Header({ balance, tab, onTab, redeemedCount }) {
   return (
-    <header className="topbar">
-      <div className="topbar__brand">
-        <span className="topbar__logo" aria-hidden="true">🌱</span>
-        <div>
-          <h1 className="topbar__name">Touch Grass Battlepass</h1>
-          <p className="topbar__season">Season 1 · Co-op</p>
+    <header className="menubar">
+      <div className="brand">
+        <span className="brand__logo">
+          <Icon name="leaf" size={20} />
+        </span>
+        <div className="brand__id">
+          <h1 className="brand__name">Touch Grass Battlepass</h1>
+          <p className="brand__season label">Season 1 · Co-op</p>
         </div>
       </div>
 
@@ -19,11 +24,13 @@ export default function Header({ balance, tab, onTab, redeemedCount }) {
         {TABS.map((t) => (
           <button
             key={t.id}
+            type="button"
             className={`tab ${tab === t.id ? 'tab--on' : ''}`}
             aria-current={tab === t.id ? 'page' : undefined}
             onClick={() => onTab(t.id)}
           >
-            {t.label}
+            <Icon name={t.icon} size={16} />
+            <span className="tab__label">{t.label}</span>
             {t.id === 'redeemed' && redeemedCount > 0 && (
               <span className="tab__badge">{redeemedCount}</span>
             )}
@@ -31,12 +38,15 @@ export default function Header({ balance, tab, onTab, redeemedCount }) {
         ))}
       </nav>
 
-      <div className="bank" title="Shared point bank">
-        <span className="bank__label">Shared Bank</span>
-        <span className="bank__value">
-          <span className="bank__coin" aria-hidden="true">◆</span>
-          {balance.toLocaleString()}
-        </span>
+      <div className="menubar__right">
+        <ThemePicker />
+        <div className="bank">
+          <span className="bank__label label">Shared bank</span>
+          <span className="bank__value">
+            <Icon name="coin" size={16} />
+            {balance.toLocaleString()}
+          </span>
+        </div>
       </div>
     </header>
   )
