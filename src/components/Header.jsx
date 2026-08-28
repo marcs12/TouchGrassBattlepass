@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react'
+import { useCountUp } from '../lib/useCountUp'
 import Icon from './Icon'
 import ThemePicker from './ThemePicker'
 import ProfileSwitcher from './ProfileSwitcher'
@@ -20,6 +22,25 @@ export default function Header({
   earned,
   onSwitch,
 }) {
+  const shown = useCountUp(balance)
+  const [pop, setPop] = useState(null)
+  const previous = useRef(balance)
+
+  // Float the change off the bank chip so a check-off is visible from any tab.
+  useEffect(() => {
+    const delta = balance - previous.current
+    previous.current = balance
+    if (delta === 0) return
+
+    const id = `${Date.now()}-${delta}`
+    setPop({ id, delta })
+    const timer = setTimeout(
+      () => setPop((current) => (current?.id === id ? null : current)),
+      900
+    )
+    return () => clearTimeout(timer)
+  }, [balance])
+
   return (
     <header className="menubar">
       <div className="brand">
@@ -45,7 +66,9 @@ export default function Header({
             <span className="tab__label">{t.label}</span>
             <span className="tab__label tab__label--short">{t.short}</span>
             {t.id === 'redeemed' && redeemedCount > 0 && (
-              <span className="tab__badge">{redeemedCount}</span>
+              <span className="tab__badge" key={redeemedCount}>
+                {redeemedCount}
+              </span>
             )}
           </button>
         ))}
@@ -63,8 +86,18 @@ export default function Header({
           <span className="bank__label label">Shared bank</span>
           <span className="bank__value">
             <Icon name="coin" size={16} />
-            {balance.toLocaleString()}
+            {shown.toLocaleString()}
           </span>
+          {pop && (
+            <span
+              key={pop.id}
+              className={`bank__pop ${pop.delta < 0 ? 'bank__pop--down' : ''}`}
+              aria-hidden="true"
+            >
+              {pop.delta > 0 ? '+' : ''}
+              {pop.delta.toLocaleString()}
+            </span>
+          )}
         </div>
       </div>
     </header>

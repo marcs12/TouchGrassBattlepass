@@ -205,6 +205,7 @@ export default function App() {
         />
 
         <main className="app__main">
+          <div className="view" key={tab}>
           {tab === 'grind' && (
             <DailyGrind
               grind={grind}
@@ -229,6 +230,7 @@ export default function App() {
           {tab === 'redeemed' && (
             <Redeemed redeemed={redeemed} members={members} />
           )}
+          </div>
         </main>
       </div>
     </ThemeProvider>
