@@ -1,235 +1,101 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import Header from './components/Header'
 import Storefront from './components/Storefront'
 import Redeemed from './components/Redeemed'
 import DailyGrind from './components/DailyGrind'
 import SeasonPass from './components/SeasonPass'
 import Setup from './components/Setup'
+import PickPlayer from './components/PickPlayer'
+import Window from './components/Window'
+import Icon from './components/Icon'
 import { ThemeProvider } from './theme/ThemeProvider'
-import { DAILY_HABITS } from './data/habits'
-import { dayKey } from './lib/day'
-import { loadState, saveState } from './lib/storage'
-
-// Seeded so the store is explorable before habits exist.
-// Replace with shared/persisted state once the backend lands.
-const STARTING_BALANCE = 2750
-
-const freshState = () => ({
-  // Set during setup - two people share one board.
-  members: null,
-  activeId: null,
-  balance: STARTING_BALANCE,
-  // Lifetime points contributed per member. These are a record of who put the
-  // work in, not a wallet: spending only ever comes out of the shared bank.
-  earned: {},
-  redeemed: [],
-  // Each member keeps their own checklist and their own goal history, so both
-  // can tick the same habit on the same day and both get paid.
-  grind: { date: dayKey(), done: {}, goalDates: {} },
-  // Season XP is the couple's combined earnings.
-  season: { xp: 0, claimed: [] },
-  // Running record of who banked what, newest first.
-  log: [],
-})
-
-const LOG_LIMIT = 40
-
-// Stored state can predate a field, so fill the gaps rather than throwing it out.
-const normalize = (state) => {
-  const base = freshState()
-  return {
-    ...base,
-    ...state,
-    earned: { ...base.earned, ...state.earned },
-    log: state.log ?? base.log,
-    grind: { ...base.grind, ...state.grind },
-    season: { ...base.season, ...state.season },
-  }
-}
-
-// A stored day that isn't today gets clean checklists; the goal history stays.
-const rollOver = (state, today = dayKey()) =>
-  state.grind.date === today
-    ? state
-    : { ...state, grind: { ...state.grind, date: today, done: {} } }
+import { useGame } from './game/useGame'
 
 export default function App() {
-  const [state, setState] = useState(() =>
-    rollOver(normalize(loadState() ?? freshState()))
-  )
+  const game = useGame()
   const [tab, setTab] = useState('grind')
-  const { members, activeId, balance, earned, redeemed, grind, season, log } =
-    state
 
-  useEffect(() => {
-    saveState(state)
-  }, [state])
+  const shell = (children) => (
+    <ThemeProvider>
+      <div className="app">
+        <main className="app__main app__main--setup">{children}</main>
+      </div>
+    </ThemeProvider>
+  )
 
-  // The app can sit open across midnight, so re-check the date on every return.
-  useEffect(() => {
-    const check = () => setState((prev) => rollOver(prev))
-    window.addEventListener('focus', check)
-    document.addEventListener('visibilitychange', check)
-    return () => {
-      window.removeEventListener('focus', check)
-      document.removeEventListener('visibilitychange', check)
-    }
-  }, [])
-
-  const handleStart = useCallback((names) => {
-    setState((prev) => {
-      const roster = names.map((name, i) => ({ id: `p${i + 1}`, name }))
-      const first = roster[0].id
-      return {
-        ...prev,
-        members: roster,
-        activeId: first,
-        earned: Object.fromEntries(roster.map((m) => [m.id, 0])),
-        grind: {
-          ...prev.grind,
-          // A v1 save carried one anonymous list; hand it to player one.
-          done: { [first]: prev.grind.done.legacy ?? [] },
-          goalDates: { [first]: prev.grind.goalDates.legacy ?? [] },
-        },
-      }
-    })
-  }, [])
-
-  const handleSwitch = useCallback((id) => {
-    setState((prev) => ({ ...prev, activeId: id }))
-  }, [])
-
-  const handleRedeem = useCallback((reward) => {
-    setState((prev) => {
-      if (prev.balance < reward.cost) return prev
-      return {
-        ...prev,
-        balance: prev.balance - reward.cost,
-        redeemed: [
-          {
-            ...reward,
-            receiptId: `${reward.id}-${Date.now()}`,
-            redeemedAt: Date.now(),
-            by: prev.activeId,
-          },
-          ...prev.redeemed,
-        ],
-      }
-    })
-  }, [])
-
-  const handleToggleHabit = useCallback((habit) => {
-    setState((prev) => {
-      const who = prev.activeId
-      const done = new Set(prev.grind.done[who] ?? [])
-      const undoing = done.has(habit.id)
-
-      // Unchecking claws the points back out of the shared bank, so it has to
-      // be able to cover them.
-      if (undoing && prev.balance < habit.points) return prev
-
-      if (undoing) done.delete(habit.id)
-      else done.add(habit.id)
-
-      const goalDates = new Set(prev.grind.goalDates[who] ?? [])
-      if (DAILY_HABITS.every((h) => done.has(h.id))) goalDates.add(prev.grind.date)
-      else goalDates.delete(prev.grind.date)
-
-      const delta = undoing ? -habit.points : habit.points
-      const entry = {
-        id: `${habit.id}-${who}-${Date.now()}`,
-        memberId: who,
-        label: undoing ? `${habit.title} (undone)` : habit.title,
-        points: delta,
-        at: Date.now(),
-      }
-
-      return {
-        ...prev,
-        log: [entry, ...prev.log].slice(0, LOG_LIMIT),
-        balance: prev.balance + delta,
-        earned: {
-          ...prev.earned,
-          [who]: Math.max(0, (prev.earned[who] ?? 0) + delta),
-        },
-        grind: {
-          ...prev.grind,
-          done: { ...prev.grind.done, [who]: [...done] },
-          goalDates: { ...prev.grind.goalDates, [who]: [...goalDates] },
-        },
-        // XP tracks the couple's earnings, so it moves with every check - but
-        // an already claimed tier stays claimed even if XP dips back under it.
-        season: { ...prev.season, xp: Math.max(0, prev.season.xp + delta) },
-      }
-    })
-  }, [])
-
-  const handleClaimTier = useCallback((tier) => {
-    setState((prev) => {
-      if (prev.season.xp < tier.xp) return prev
-      if (prev.season.claimed.includes(tier.n)) return prev
-
-      return {
-        ...prev,
-        balance:
-          tier.type === 'bonus' ? prev.balance + tier.value : prev.balance,
-        season: { ...prev.season, claimed: [...prev.season.claimed, tier.n] },
-      }
-    })
-  }, [])
-
-  if (!members) {
-    return (
-      <ThemeProvider>
-        <div className="app">
-          <main className="app__main app__main--setup">
-            <Setup onStart={handleStart} />
-          </main>
-        </div>
-      </ThemeProvider>
+  if (!game.ready) {
+    return shell(
+      <Window title="connecting">
+        <p className="empty">Finding your board…</p>
+      </Window>
     )
+  }
+
+  // No board yet: start one, or join the other phone's with its code.
+  if (!game.members) {
+    return shell(
+      <Setup
+        mode={game.mode}
+        error={game.error}
+        onStart={game.start}
+        onJoin={game.join}
+      />
+    )
+  }
+
+  // Joined, but this device hasn't said which player it is.
+  if (!game.activeId) {
+    return shell(<PickPlayer members={game.members} onPick={game.pickMember} />)
   }
 
   return (
     <ThemeProvider>
       <div className="app">
         <Header
-          balance={balance}
+          balance={game.balance}
           tab={tab}
           onTab={setTab}
-          redeemedCount={redeemed.length}
-          members={members}
-          activeId={activeId}
-          earned={earned}
-          onSwitch={handleSwitch}
+          redeemedCount={game.redeemed.length}
+          members={game.members}
+          activeId={game.activeId}
+          earned={game.earned}
+          code={game.code}
+          onSwitch={game.switchMember}
         />
 
         <main className="app__main">
+          {game.error && (
+            <p className="banner banner--warn">
+              <Icon name="lock" size={16} strokeWidth="1.9" />
+              {game.error}
+            </p>
+          )}
+
           <div className="view" key={tab}>
-          {tab === 'grind' && (
-            <DailyGrind
-              grind={grind}
-              members={members}
-              activeId={activeId}
-              earned={earned}
-              balance={balance}
-              log={log}
-              onToggleHabit={handleToggleHabit}
-            />
-          )}
-          {tab === 'season' && (
-            <SeasonPass season={season} onClaimTier={handleClaimTier} />
-          )}
-          {tab === 'store' && (
-            <Storefront
-              balance={balance}
-              redeemed={redeemed}
-              onRedeem={handleRedeem}
-            />
-          )}
-          {tab === 'redeemed' && (
-            <Redeemed redeemed={redeemed} members={members} />
-          )}
+            {tab === 'grind' && (
+              <DailyGrind
+                grind={game.grind}
+                members={game.members}
+                activeId={game.activeId}
+                earned={game.earned}
+                balance={game.balance}
+                log={game.log}
+                onToggleHabit={game.toggleHabit}
+              />
+            )}
+            {tab === 'season' && (
+              <SeasonPass season={game.season} onClaimTier={game.claimTier} />
+            )}
+            {tab === 'store' && (
+              <Storefront
+                balance={game.balance}
+                redeemed={game.redeemed}
+                onRedeem={game.redeem}
+              />
+            )}
+            {tab === 'redeemed' && (
+              <Redeemed redeemed={game.redeemed} members={game.members} />
+            )}
           </div>
         </main>
       </div>

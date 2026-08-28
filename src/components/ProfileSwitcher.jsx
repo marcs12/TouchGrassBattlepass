@@ -5,7 +5,13 @@ const initial = (name) => name.trim().charAt(0).toUpperCase()
 
 // Both people share one screen, so switching who is checking things off has
 // to be one tap away.
-export default function ProfileSwitcher({ members, activeId, earned, onSwitch }) {
+export default function ProfileSwitcher({
+  members,
+  activeId,
+  earned,
+  code,
+  onSwitch,
+}) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
   const buttonRef = useRef(null)
@@ -81,6 +87,13 @@ export default function ProfileSwitcher({ members, activeId, earned, onSwitch })
               </button>
             )
           })}
+
+          {code && (
+            <p className="themer__foot">
+              <span className="label">Household code</span>
+              <strong>{code}</strong>
+            </p>
+          )}
         </div>
       )}
     </div>
