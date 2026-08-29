@@ -110,19 +110,35 @@ export default function DevPanel({ game, onClose }) {
         <section className="dev__group">
           <p className="label">Points</p>
           <div className="dev__buttons">
-            <button type="button" className="dev__btn" onClick={() => dev.grant?.(500)}>
-              +500
-            </button>
-            <button type="button" className="dev__btn" onClick={() => dev.grant?.(2500)}>
-              +2,500
-            </button>
+            {[10, 20, 30, 100, 500, 2500].map((n) => (
+              <button
+                key={n}
+                type="button"
+                className="dev__btn"
+                onClick={() => dev.grant?.(n)}
+              >
+                +{n.toLocaleString()}
+              </button>
+            ))}
+          </div>
+          <div className="dev__buttons">
+            {[10, 20, 30, 100].map((n) => (
+              <button
+                key={n}
+                type="button"
+                className="dev__btn"
+                onClick={() => dev.grant?.(-n)}
+              >
+                −{n}
+              </button>
+            ))}
             <button type="button" className="dev__btn" onClick={() => dev.completeDaily?.()}>
               clear daily list
             </button>
           </div>
           <p className="dev__hint">
             Grants land as habit checks, so they move the bank and season XP
-            together.
+            together. Taking points back can't push the bank below zero.
           </p>
         </section>
 

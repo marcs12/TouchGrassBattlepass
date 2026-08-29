@@ -8,6 +8,7 @@ export default function RewardCard({
   inCart,
   editing,
   onAdd,
+  onEdit,
   onRemove,
 }) {
   const tier = TIERS[reward.tier] ?? TIERS.low
@@ -35,14 +36,23 @@ export default function RewardCard({
           )
         )}
         {editing && (
-          <button
-            type="button"
-            className="card__remove"
-            aria-label={`Remove ${reward.title}`}
-            onClick={() => onRemove(reward.id, Boolean(reward.custom))}
-          >
-            <Icon name="trash" size={15} strokeWidth="1.9" />
-          </button>
+          <span className="card__tools">
+            <button
+              type="button"
+              aria-label={`Edit ${reward.title}`}
+              onClick={() => onEdit(reward)}
+            >
+              <Icon name="pencil" size={15} strokeWidth="1.9" />
+            </button>
+            <button
+              type="button"
+              className="card__danger"
+              aria-label={`Remove ${reward.title}`}
+              onClick={() => onRemove(reward.id, Boolean(reward.custom))}
+            >
+              <Icon name="trash" size={15} strokeWidth="1.9" />
+            </button>
+          </span>
         )}
       </div>
 

@@ -28,11 +28,13 @@ export default function Storefront({
   onCheckout,
   checkingOut,
   onAddReward,
+  onEditReward,
   onRemoveReward,
 }) {
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState('cheapest')
   const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(null)
 
   const affordableCount = useMemo(
     () => rewards.filter((r) => r.cost <= balance).length,
@@ -97,7 +99,16 @@ export default function Storefront({
                 <span style={{ width: `${nextProgress}%` }} />
               </div>
               <p className="nextup__hint">
-                <strong>{(nextUp.cost - balance).toLocaleString()}</strong> pts to go
+                {balance === 0 && redeemed.length === 0 ? (
+                  <>
+                    Your first check-off starts it off —{' '}
+                    <strong>{nextUp.cost.toLocaleString()}</strong> pts opens this
+                  </>
+                ) : (
+                  <>
+                    <strong>{(nextUp.cost - balance).toLocaleString()}</strong> pts to go
+                  </>
+                )}
               </p>
             </>
           ) : (
@@ -148,8 +159,28 @@ export default function Storefront({
         </div>
       </div>
 
-      {editing && (
-        <ItemForm kind="reward" onAdd={onAddReward} onCancel={() => setEditing(false)} />
+      {draft ? (
+        <ItemForm
+          // Keyed so switching between adding and editing remounts the form
+          // rather than reusing the previous draft's state.
+          key={`edit-${draft.id}`}
+          kind="reward"
+          editing={draft}
+          onAdd={(payload) => {
+            onEditReward(draft.id, payload)
+            setDraft(null)
+          }}
+          onCancel={() => setDraft(null)}
+        />
+      ) : (
+        editing && (
+          <ItemForm
+            key="add"
+            kind="reward"
+            onAdd={onAddReward}
+            onCancel={() => setEditing(false)}
+          />
+        )
       )}
 
       <Cart
@@ -174,6 +205,7 @@ export default function Storefront({
               inCart={inCart(reward.id)}
               editing={editing}
               onAdd={addToCart}
+              onEdit={setDraft}
               onRemove={onRemoveReward}
             />
           ))}

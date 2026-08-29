@@ -6,14 +6,27 @@ const REWARD_ICONS = ['coffee', 'icecream', 'wrap', 'moped', 'film', 'sushi', 's
 
 const BLANK = { title: '', note: '', points: '', icon: '', kind: 'daily', tier: 'low' }
 
+// An existing entry becomes a draft: same form, prefilled, saving in place.
+const draftFrom = (item, isHabit, icons) =>
+  item
+    ? {
+        title: item.title ?? '',
+        note: (isHabit ? item.note : item.description) ?? '',
+        points: String(isHabit ? item.points : item.cost),
+        icon: item.icon ?? icons[0],
+        kind: item.kind ?? 'daily',
+        tier: item.tier ?? 'low',
+      }
+    : { ...BLANK, icon: icons[0] }
+
 /**
  * Adds a habit or a reward without touching the code. Kept deliberately small:
  * a name, a line of detail, what it's worth, and a picture.
  */
-export default function ItemForm({ kind, onAdd, onCancel }) {
+export default function ItemForm({ kind, editing, onAdd, onCancel }) {
   const isHabit = kind === 'habit'
   const icons = isHabit ? HABIT_ICONS : REWARD_ICONS
-  const [draft, setDraft] = useState({ ...BLANK, icon: icons[0] })
+  const [draft, setDraft] = useState(() => draftFrom(editing, isHabit, icons))
 
   const points = Number(draft.points)
   const ready = draft.title.trim().length > 0 && points > 0
@@ -41,14 +54,14 @@ export default function ItemForm({ kind, onAdd, onCancel }) {
             icon: draft.icon,
           }
     )
-    setDraft({ ...BLANK, icon: icons[0] })
+    if (!editing) setDraft({ ...BLANK, icon: icons[0] })
   }
 
   return (
     <form className="itemform" onSubmit={submit}>
       <p className="field">
         <label className="label" htmlFor="item-title">
-          {isHabit ? 'Habit' : 'Reward'}
+          {editing ? `Editing ${editing.title}` : isHabit ? 'Habit' : 'Reward'}
         </label>
         <input
           id="item-title"
@@ -137,11 +150,11 @@ export default function ItemForm({ kind, onAdd, onCancel }) {
 
       <div className="itemform__actions">
         <button type="submit" className="btn" disabled={!ready}>
-          <Icon name="plus" size={14} strokeWidth="2.2" />
-          Add {isHabit ? 'habit' : 'reward'}
+          <Icon name={editing ? 'check' : 'plus'} size={14} strokeWidth="2.2" />
+          {editing ? 'Save changes' : `Add ${isHabit ? 'habit' : 'reward'}`}
         </button>
         <button type="button" className="chip" onClick={onCancel}>
-          Done
+          {editing ? 'Cancel' : 'Done'}
         </button>
       </div>
     </form>
