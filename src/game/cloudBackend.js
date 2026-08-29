@@ -8,6 +8,14 @@ import {
   slugify,
 } from '../data/catalog'
 import { shiftDay, today as todayKey } from '../lib/day'
+import {
+  applyPending,
+  cacheRows,
+  cachedRows,
+  isOffline,
+  loadQueue,
+  saveQueue,
+} from '../lib/queue'
 
 // Supabase-backed mode: two devices, one board.
 //
@@ -129,9 +137,14 @@ export function useCloudGame() {
   // on a patchy connection doesn't leave you guessing whether it counted.
   const [status, setStatus] = useState('idle')
   const [notice, setNotice] = useState(null)
+  // Writes are queued first and replayed after, so going offline is the same
+  // code path as being online, just slower to drain.
+  const [queue, setQueue] = useState(loadQueue)
+  const flushRef = useRef(null)
   const refetchTimer = useRef(null)
   const inFlight = useRef(0)
   const seenIds = useRef(null)
+  const flushing = useRef(false)
 
   // Every write goes through here so the status dot reflects reality.
   const track = useCallback(async (run) => {
@@ -151,7 +164,10 @@ export function useCloudGame() {
   }, [])
 
   useEffect(() => {
-    const online = () => setStatus((s) => (s === 'offline' ? 'idle' : s))
+    const online = () => {
+      setStatus((s) => (s === 'offline' ? 'idle' : s))
+      flushRef.current?.()
+    }
     const offline = () => setStatus('offline')
     if (!navigator.onLine) setStatus('offline')
     window.addEventListener('online', online)
@@ -231,6 +247,14 @@ export function useCloudGame() {
       claims: claims.data ?? [],
       catalog: catalog.error ? [] : (catalog.data ?? []),
     })
+    cacheRows(id, {
+      household: household.data,
+      members: members.data ?? [],
+      checks: checks.data ?? [],
+      redemptions: redemptions.data ?? [],
+      claims: claims.data ?? [],
+      catalog: catalog.error ? [] : (catalog.data ?? []),
+    })
   }, [])
 
   // Realtime is a nudge, not a diff: any change just re-reads the board.
@@ -247,6 +271,16 @@ export function useCloudGame() {
     let cancelled = false
 
     const boot = async () => {
+      // Paint the last board we saw before touching the network, so opening
+      // the app on a dead connection shows your grind, not the setup screen.
+      const remembered = readHousehold()
+      const offlineRows = remembered ? cachedRows(remembered) : null
+      if (offlineRows && !cancelled) {
+        setHouseholdId(remembered)
+        setRows(offlineRows)
+        setReady(true)
+      }
+
       try {
         const { data } = await supabase.auth.getSession()
         if (!data.session) {
@@ -259,7 +293,6 @@ export function useCloudGame() {
           .select('household_id, member_id')
         if (linkError) throw linkError
 
-        const remembered = readHousehold()
         const link =
           links?.find((l) => l.household_id === remembered) ?? links?.[0] ?? null
 
@@ -327,7 +360,88 @@ export function useCloudGame() {
 
   const dismissNotice = useCallback(() => setNotice(null), [])
 
-  const view = useMemo(() => project(rows, today), [rows, today])
+  useEffect(() => {
+    saveQueue(queue)
+  }, [queue])
+
+  const view = useMemo(
+    () => project(applyPending(rows, queue), today),
+    [rows, queue, today]
+  )
+
+
+  // Replays queued writes in order. A failure stops the drain and leaves the
+  // rest queued, so nothing is dropped and order is preserved.
+  const runOp = useCallback(
+    async (op) => {
+      switch (op.type) {
+        case 'check.add':
+          return supabase
+            .from('habit_checks')
+            .upsert(op.row, { onConflict: 'household_id,member_id,habit_id,day' })
+        case 'check.remove':
+          return supabase.from('habit_checks').delete().match(op.match)
+        case 'coupon.set':
+          return supabase
+            .from('redemptions')
+            .update({ used_at: op.usedAt })
+            .eq('id', op.receiptId)
+        case 'catalog.upsert':
+          return supabase
+            .from('catalog_items')
+            .upsert(op.row, { onConflict: 'household_id,kind,item_id' })
+        case 'catalog.remove':
+          return supabase
+            .from('catalog_items')
+            .delete()
+            .match({ household_id: householdId, kind: op.kind, item_id: op.itemId })
+        default:
+          return { error: null }
+      }
+    },
+    [householdId]
+  )
+
+  const flush = useCallback(async () => {
+    if (flushing.current || isOffline()) return
+    flushing.current = true
+
+    try {
+      let pending = loadQueue()
+      while (pending.length > 0) {
+        const [op] = pending
+        setStatus('saving')
+        const { error: opError } = await runOp(op)
+        if (opError) {
+          setStatus('error')
+          setError(opError.message)
+          return
+        }
+        pending = pending.slice(1)
+        saveQueue(pending)
+        setQueue(pending)
+      }
+      setStatus(isOffline() ? 'offline' : 'idle')
+      if (householdId) fetchRows(householdId)
+    } finally {
+      flushing.current = false
+    }
+  }, [runOp, householdId, fetchRows])
+
+  useEffect(() => {
+    flushRef.current = flush
+  }, [flush])
+
+  const enqueue = useCallback(
+    (op) => {
+      const next = [...loadQueue(), { id: `op-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, at: Date.now(), ...op }]
+      saveQueue(next)
+      setQueue(next)
+      if (isOffline()) setStatus('offline')
+      else flush()
+    },
+    [flush]
+  )
 
   const start = useCallback(
     async (names) => {
@@ -388,33 +502,40 @@ export function useCloudGame() {
       // Unchecking claws points back out of the shared bank, so it has to cover them.
       if (checkedToday && view.balance < habit.points) return
 
-      await track(async () => {
-        const { error: writeError } = checkedToday
-          ? await supabase.from('habit_checks').delete().match({
-              household_id: householdId,
-              member_id: activeId,
-              habit_id: habit.id,
-              day: today,
-            })
-          : await supabase.from('habit_checks').insert({
-              household_id: householdId,
-              member_id: activeId,
-              habit_id: habit.id,
-              title: habit.title,
-              day: today,
-              points: habit.points,
-            })
-        if (writeError) throw writeError
-      })
-
-      fetchRows(householdId)
+      enqueue(
+        checkedToday
+          ? {
+              type: 'check.remove',
+              match: {
+                household_id: householdId,
+                member_id: activeId,
+                habit_id: habit.id,
+                day: today,
+              },
+            }
+          : {
+              type: 'check.add',
+              row: {
+                household_id: householdId,
+                member_id: activeId,
+                habit_id: habit.id,
+                title: habit.title,
+                day: today,
+                points: habit.points,
+              },
+            }
+      )
     },
-    [householdId, activeId, today, view, fetchRows, track]
+    [householdId, activeId, today, view, enqueue]
   )
 
   const redeem = useCallback(
     async (reward) => {
       if (!householdId) return
+      if (isOffline()) {
+        setError('Checkout needs a connection - the bank is checked on the server.')
+        return
+      }
       await track(async () => {
         const { error: rpcError } = await supabase.rpc('redeem_reward', {
           p_household: householdId,
@@ -436,6 +557,10 @@ export function useCloudGame() {
   const claimTier = useCallback(
     async (tier) => {
       if (!householdId) return
+      if (isOffline()) {
+        setError('Claiming needs a connection - tiers are checked on the server.')
+        return
+      }
       const { error: rpcError } = await supabase.rpc('claim_tier', {
         p_household: householdId,
         p_tier: tier.n,
@@ -469,70 +594,66 @@ export function useCloudGame() {
   )
 
   const setCouponUsed = useCallback(
-    async (receiptId, used) => {
-      const { error: updateError } = await supabase
-        .from('redemptions')
-        .update({ used_at: used ? new Date().toISOString() : null })
-        .eq('id', receiptId)
-      if (updateError) setError(updateError.message)
-      fetchRows(householdId)
-    },
-    [householdId, fetchRows]
+    (receiptId, used) =>
+      enqueue({
+        type: 'coupon.set',
+        receiptId,
+        usedAt: used ? new Date().toISOString() : null,
+      }),
+    [enqueue]
   )
 
   const addCatalogItem = useCallback(
-    async (kind, payload) => {
+    (kind, payload) => {
       if (!householdId) return
       const itemId = slugify(payload.title)
-      const { error: insertError } = await supabase.from('catalog_items').insert({
-        household_id: householdId,
-        kind,
-        item_id: itemId,
-        payload: { ...payload, hue: hueFor(itemId) },
+      enqueue({
+        type: 'catalog.upsert',
+        row: {
+          household_id: householdId,
+          kind,
+          item_id: itemId,
+          hidden: false,
+          payload: { ...payload, hue: hueFor(itemId) },
+        },
       })
-      if (insertError) setError(insertError.message)
-      fetchRows(householdId)
     },
-    [householdId, fetchRows]
+    [householdId, enqueue]
   )
 
   // Editing a built-in stores an override row rather than changing code.
   const editCatalogItem = useCallback(
-    async (kind, itemId, payload) => {
+    (kind, itemId, payload) => {
       if (!householdId) return
-      const { error: upsertError } = await supabase.from('catalog_items').upsert(
-        { household_id: householdId, kind, item_id: itemId, hidden: false, payload },
-        { onConflict: 'household_id,kind,item_id' }
-      )
-      if (upsertError) setError(upsertError.message)
-      fetchRows(householdId)
+      enqueue({
+        type: 'catalog.upsert',
+        row: { household_id: householdId, kind, item_id: itemId, hidden: false, payload },
+      })
     },
-    [householdId, fetchRows]
+    [householdId, enqueue]
   )
 
   // Custom entries are dropped; built-ins are only switched off, since they
   // live in code and would come back on the next load anyway.
   const removeCatalogItem = useCallback(
-    async (kind, itemId, isCustom) => {
+    (kind, itemId, isCustom) => {
       if (!householdId) return
-
-      if (isCustom) {
-        const { error: deleteError } = await supabase
-          .from('catalog_items')
-          .delete()
-          .match({ household_id: householdId, kind, item_id: itemId })
-        if (deleteError) setError(deleteError.message)
-      } else {
-        const { error: upsertError } = await supabase.from('catalog_items').upsert(
-          { household_id: householdId, kind, item_id: itemId, hidden: true, payload: null },
-          { onConflict: 'household_id,kind,item_id' }
-        )
-        if (upsertError) setError(upsertError.message)
-      }
-
-      fetchRows(householdId)
+      enqueue(
+        isCustom
+          ? { type: 'catalog.remove', kind, itemId }
+          : {
+              type: 'catalog.upsert',
+              row: {
+                household_id: householdId,
+                kind,
+                item_id: itemId,
+                hidden: true,
+                payload: null,
+              },
+            }
+      )
     },
-    [householdId, fetchRows]
+    [householdId, enqueue]
   )
 
   // habit_checks only holds positive points, so taking points back means
@@ -678,7 +799,8 @@ export function useCloudGame() {
     addCatalogItem,
     editCatalogItem,
     removeCatalogItem,
-    status,
+    status: queue.length > 0 && status !== 'error' ? (isOffline() ? 'offline' : 'saving') : status,
+    pending: queue.length,
     notice,
     dismissNotice,
     dev: {

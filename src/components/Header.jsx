@@ -25,6 +25,7 @@ export default function Header({
   onSwitch,
   onLogoTap,
   status,
+  pending,
 }) {
   const shown = useCountUp(balance)
   const [pop, setPop] = useState(null)
@@ -96,7 +97,7 @@ export default function Header({
         <div className="bank">
           <span className="bank__label label">
             Shared bank
-            <SyncDot status={status} />
+            <SyncDot status={status} pending={pending} />
           </span>
           <span className="bank__value">
             <Icon name="coin" size={16} />
