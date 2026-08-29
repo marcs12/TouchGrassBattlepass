@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { DAILY_HABITS } from '../data/habits'
-import { dayKey, shiftDay } from '../lib/day'
+import { shiftDay, today as todayKey } from '../lib/day'
 
 // Supabase-backed mode: two devices, one board.
 //
@@ -109,12 +109,12 @@ export function useCloudGame() {
   const [householdId, setHouseholdId] = useState(null)
   const [activeId, setActiveId] = useState(null)
   const [rows, setRows] = useState(emptyRows)
-  const [today, setToday] = useState(dayKey())
+  const [today, setToday] = useState(todayKey())
   const refetchTimer = useRef(null)
 
   const fetchRows = useCallback(async (id) => {
     if (!id) return
-    const since = shiftDay(dayKey(), -HISTORY_DAYS)
+    const since = shiftDay(todayKey(), -HISTORY_DAYS)
 
     const [household, members, checks, redemptions, claims] = await Promise.all([
       supabase.from('households').select('*').eq('id', id).maybeSingle(),
@@ -211,7 +211,7 @@ export function useCloudGame() {
   // Coming back to the app can mean a new day, and a stale board.
   useEffect(() => {
     const check = () => {
-      setToday(dayKey())
+      setToday(todayKey())
       if (householdId) fetchRows(householdId)
     }
     window.addEventListener('focus', check)
@@ -346,6 +346,87 @@ export function useCloudGame() {
     [householdId, activeId, fetchRows]
   )
 
+  // ---- developer tools -------------------------------------------------
+  // Writes go through the same tables as real play, so anything seeded here
+  // syncs to the other device exactly like a real check-off would.
+
+  const insertChecks = useCallback(
+    async (rows) => {
+      if (!householdId || !activeId || rows.length === 0) return
+      const { error: insertError } = await supabase
+        .from('habit_checks')
+        .upsert(
+          rows.map((r) => ({ household_id: householdId, member_id: activeId, ...r })),
+          { onConflict: 'household_id,member_id,habit_id,day' }
+        )
+      if (insertError) setError(insertError.message)
+      fetchRows(householdId)
+    },
+    [householdId, activeId, fetchRows]
+  )
+
+  const devGrant = useCallback(
+    (points) =>
+      insertChecks([
+        {
+          habit_id: `dev-grant-${Date.now()}`,
+          title: 'Dev grant',
+          day: today,
+          points,
+        },
+      ]),
+    [insertChecks, today]
+  )
+
+  const devCompleteDaily = useCallback(
+    () =>
+      insertChecks(
+        DAILY_HABITS.map((h) => ({
+          habit_id: h.id,
+          title: h.title,
+          day: today,
+          points: h.points,
+        }))
+      ),
+    [insertChecks, today]
+  )
+
+  const devClearToday = useCallback(async () => {
+    if (!householdId || !activeId) return
+    const { error: deleteError } = await supabase
+      .from('habit_checks')
+      .delete()
+      .match({ household_id: householdId, member_id: activeId, day: today })
+    if (deleteError) setError(deleteError.message)
+    fetchRows(householdId)
+  }, [householdId, activeId, today, fetchRows])
+
+  // Backfills cleared days so the streak strip has something to show.
+  const devSeedHistory = useCallback(
+    (days) => {
+      const rows = []
+      for (let i = 1; i <= days; i += 1) {
+        const day = shiftDay(today, -i)
+        for (const h of DAILY_HABITS) {
+          rows.push({ habit_id: h.id, title: h.title, day, points: h.points })
+        }
+      }
+      return insertChecks(rows)
+    },
+    [insertChecks, today]
+  )
+
+  // Drops this device off the board without touching the shared data.
+  const devForget = useCallback(async () => {
+    await supabase.auth.signOut()
+    try {
+      localStorage.removeItem(HOUSEHOLD_KEY)
+    } catch {
+      /* nothing to clear */
+    }
+    location.reload()
+  }, [])
+
   return {
     mode: 'cloud',
     ready,
@@ -361,5 +442,13 @@ export function useCloudGame() {
     toggleHabit,
     redeem,
     claimTier,
+    dev: {
+      grant: devGrant,
+      completeDaily: devCompleteDaily,
+      clearToday: devClearToday,
+      seedHistory: devSeedHistory,
+      forget: devForget,
+      refresh: () => fetchRows(householdId),
+    },
   }
 }

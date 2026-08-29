@@ -22,6 +22,7 @@ export default function Header({
   earned,
   code,
   onSwitch,
+  onLogoTap,
 }) {
   const shown = useCountUp(balance)
   const [pop, setPop] = useState(null)
@@ -45,9 +46,15 @@ export default function Header({
   return (
     <header className="menubar">
       <div className="brand">
-        <span className="brand__logo">
+        {/* Also the way into developer mode: seven taps inside three seconds. */}
+        <button
+          type="button"
+          className="brand__logo"
+          onClick={onLogoTap}
+          aria-label="Touch Grass Battlepass"
+        >
           <Icon name="leaf" size={20} />
-        </span>
+        </button>
         <div className="brand__id">
           <h1 className="brand__name">Touch Grass Battlepass</h1>
           <p className="brand__season label">Season 1 · Co-op</p>

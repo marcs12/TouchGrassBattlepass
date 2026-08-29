@@ -144,6 +144,33 @@ token, so adding a theme is one entry in that file and no CSS changes.
 Icons come from the stroke set in `src/components/Icon.jsx`; add a path there
 to use a new one.
 
+## Developer mode
+
+Hidden testing surface, available in the deployed app as well as locally.
+Three ways in:
+
+- **Phone** - tap the leaf logo seven times within three seconds
+- **Laptop** - type `dev`, or press ctrl/cmd + shift + D
+- **Either** - load the app with `#dev` on the end of the URL
+
+Once unlocked it stays on for that browser until you press *off* in the panel.
+
+What it gives you:
+
+| Tool | Why |
+| --- | --- |
+| Time travel (±1 day) | Shifts what the app calls today, so daily resets and streaks are testable without waiting overnight |
+| Grant points | Lands as a habit check, so the bank and season XP move together |
+| Clear daily list | Fills every daily habit for the active player in one tap |
+| Seed 6-day streak | Backfills cleared days so the streak strip has history |
+| Clear today / refetch | Undo a test run, or force a re-read in synced mode |
+| Leave board / wipe local | Returns this device to setup without touching shared data |
+
+Everything writes through the normal data path, so in synced mode a seeded day
+shows up on the other phone exactly like a real check-off. The day offset lives
+in `localStorage` under `tgbp.dev.offset` and only affects `today()` - stored
+dates are never rewritten.
+
 ## Still to do
 
 - Offline queueing, so a check-off made with no signal syncs when it returns
