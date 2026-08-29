@@ -51,8 +51,9 @@ This is the whole setup:
 2. **Run the schema.** Open the project's SQL Editor, paste all of
    `supabase/schema.sql`, and run it. It creates the tables, the row-level
    security policies, and the functions the app calls. Then run
-   `supabase/002-catalog-and-coupons.sql`, which adds custom catalog entries
-   and the used-coupon flag.
+   `supabase/002-catalog-and-coupons.sql` (custom catalog entries and the
+   used-coupon flag) and `supabase/003-zero-seed-balance.sql` (start a season
+   with an empty bank).
 3. **Turn on anonymous sign-ins.** Authentication -> Sign In / Providers ->
    enable *Anonymous sign-ins*. Devices never make an account; they get an
    anonymous identity that is tied to your household.
@@ -97,6 +98,9 @@ Nothing stores a balance. Every point is derived from rows:
 ```
 balance = seed_balance + habit points + claimed tier bonuses - redemptions
 ```
+
+`seed_balance` is zero for new households: a season starts empty, so every
+point in the bank was earned by someone.
 
 A check-off is one row, so two phones checking things off at the same moment
 insert two rows instead of overwriting each other's totals. Spending goes
