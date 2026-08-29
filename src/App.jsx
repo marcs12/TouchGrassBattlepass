@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Header from './components/Header'
 import Storefront from './components/Storefront'
 import Redeemed from './components/Redeemed'
@@ -13,6 +13,13 @@ import { useGame } from './game/useGame'
 import { useDevMode } from './game/useDevMode'
 import DevPanel from './components/DevPanel'
 import PurchaseOverlay from './components/PurchaseOverlay'
+import Toast from './components/Toast'
+import Celebrate from './components/Celebrate'
+import { streakFrom } from './lib/day'
+import { successFeedback, tapFeedback } from './lib/haptics'
+
+// Streak lengths worth a moment, highest first.
+const MILESTONES = [30, 14, 7, 3]
 
 export default function App() {
   const game = useGame()
@@ -22,6 +29,62 @@ export default function App() {
   const [cart, setCart] = useState([])
   const [checkingOut, setCheckingOut] = useState(false)
   const [purchase, setPurchase] = useState(null)
+  const [party, setParty] = useState(null)
+  const seenMilestones = useRef(null)
+
+  // Streaks are the long game, so the round numbers get a moment. Recorded
+  // per member so a milestone fires once, not on every render.
+  const streak = game.activeId
+    ? streakFrom(game.grind?.goalDates?.[game.activeId] ?? [], game.grind?.date)
+    : 0
+
+  useEffect(() => {
+    if (!game.activeId) return
+
+    const key = `tgbp.milestones.${game.activeId}`
+    if (seenMilestones.current === null) {
+      let stored = null
+      try {
+        stored = JSON.parse(localStorage.getItem(key) ?? 'null')
+      } catch {
+        stored = null
+      }
+
+      // First time on this device, treat everything already earned as seen:
+      // a streak that was six days old before this shipped shouldn't throw a
+      // party for day three. Only crossings from here on are celebrated.
+      seenMilestones.current = new Set(
+        stored ?? MILESTONES.filter((n) => streak >= n)
+      )
+      if (!stored) {
+        try {
+          localStorage.setItem(key, JSON.stringify([...seenMilestones.current]))
+        } catch {
+          /* private mode - milestones may re-fire, which is harmless */
+        }
+        return
+      }
+    }
+
+    const milestone = MILESTONES.find((n) => streak >= n)
+    if (!milestone || seenMilestones.current.has(milestone)) return
+
+    seenMilestones.current.add(milestone)
+    try {
+      localStorage.setItem(key, JSON.stringify([...seenMilestones.current]))
+    } catch {
+      /* private mode - the milestone may fire again, which is harmless */
+    }
+
+    successFeedback()
+    setParty({
+      id: `streak-${milestone}`,
+      icon: 'flame',
+      eyebrow: 'Streak',
+      title: `${milestone} days straight`,
+      note: 'Whole daily list, every one of those days.',
+    })
+  }, [streak, game.activeId])
 
   const checkout = async () => {
     const items = cart
@@ -37,6 +100,7 @@ export default function App() {
           await game.redeem(item)
         }
       }
+      successFeedback()
       setCart([])
       setPurchase({
         items,
@@ -94,6 +158,7 @@ export default function App() {
           code={game.code}
           onSwitch={game.switchMember}
           onLogoTap={dev.registerTap}
+          status={game.status}
         />
 
         <main className="app__main">
@@ -116,15 +181,34 @@ export default function App() {
                 dailyHabits={game.dailyHabits}
                 bonusHabits={game.bonusHabits}
                 dailyGoal={game.dailyGoal}
-                onToggleHabit={game.toggleHabit}
+                onToggleHabit={(habit) => {
+                  tapFeedback()
+                  game.toggleHabit(habit)
+                }}
                 onAddHabit={(payload) => game.addCatalogItem('habit', payload)}
+                onEditHabit={(id, payload) =>
+                  game.editCatalogItem('habit', id, payload)
+                }
                 onRemoveHabit={(id, custom) =>
                   game.removeCatalogItem('habit', id, custom)
                 }
               />
             )}
             {tab === 'season' && (
-              <SeasonPass season={game.season} onClaimTier={game.claimTier} />
+              <SeasonPass
+                season={game.season}
+                onClaimTier={(tier) => {
+                  successFeedback()
+                  game.claimTier(tier)
+                  setParty({
+                    id: `tier-${tier.n}`,
+                    icon: tier.icon,
+                    eyebrow: `Tier ${tier.n} claimed`,
+                    title: tier.title,
+                    note: tier.note,
+                  })
+                }}
+              />
             )}
             {tab === 'store' && (
               <Storefront
@@ -136,6 +220,9 @@ export default function App() {
                 onCheckout={checkout}
                 checkingOut={checkingOut}
                 onAddReward={(payload) => game.addCatalogItem('reward', payload)}
+                onEditReward={(id, payload) =>
+                  game.editCatalogItem('reward', id, payload)
+                }
                 onRemoveReward={(id, custom) =>
                   game.removeCatalogItem('reward', id, custom)
                 }
@@ -153,6 +240,12 @@ export default function App() {
 
         {purchase && (
           <PurchaseOverlay purchase={purchase} onDone={() => setPurchase(null)} />
+        )}
+
+        {party && <Celebrate celebration={party} onDone={() => setParty(null)} />}
+
+        {game.notice && (
+          <Toast notice={game.notice} onDone={game.dismissNotice} />
         )}
 
         {dev.on && <DevPanel game={game} onClose={dev.disable} />}

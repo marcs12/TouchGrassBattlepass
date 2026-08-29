@@ -122,9 +122,45 @@ export function useCloudGame() {
   const [error, setError] = useState(null)
   const [householdId, setHouseholdId] = useState(null)
   const [activeId, setActiveId] = useState(null)
+  const activeIdRef = useRef(null)
   const [rows, setRows] = useState(emptyRows)
   const [today, setToday] = useState(todayKey())
+  // 'idle' | 'saving' | 'error' | 'offline' - shown as a quiet dot, so a tap
+  // on a patchy connection doesn't leave you guessing whether it counted.
+  const [status, setStatus] = useState('idle')
+  const [notice, setNotice] = useState(null)
   const refetchTimer = useRef(null)
+  const inFlight = useRef(0)
+  const seenIds = useRef(null)
+
+  // Every write goes through here so the status dot reflects reality.
+  const track = useCallback(async (run) => {
+    inFlight.current += 1
+    setStatus('saving')
+    try {
+      const result = await run()
+      inFlight.current -= 1
+      if (inFlight.current === 0) setStatus(navigator.onLine ? 'idle' : 'offline')
+      return result
+    } catch (e) {
+      inFlight.current = Math.max(0, inFlight.current - 1)
+      setStatus('error')
+      setError(e.message ?? String(e))
+      return null
+    }
+  }, [])
+
+  useEffect(() => {
+    const online = () => setStatus((s) => (s === 'offline' ? 'idle' : s))
+    const offline = () => setStatus('offline')
+    if (!navigator.onLine) setStatus('offline')
+    window.addEventListener('online', online)
+    window.addEventListener('offline', offline)
+    return () => {
+      window.removeEventListener('online', online)
+      window.removeEventListener('offline', offline)
+    }
+  }, [])
 
   const fetchRows = useCallback(async (id) => {
     if (!id) return
@@ -150,6 +186,43 @@ export function useCloudGame() {
     }
 
     setError(null)
+
+    // Anything new from the other player, announced once.
+    const incoming = [
+      ...(checks.data ?? []).map((c) => ({
+        id: `c-${c.id}`,
+        memberId: c.member_id,
+        text: `${c.title} · +${c.points}`,
+        at: new Date(c.created_at).getTime(),
+      })),
+      ...(redemptions.data ?? []).map((r) => ({
+        id: `r-${r.id}`,
+        memberId: r.member_id,
+        text: `redeemed ${r.title}`,
+        at: new Date(r.created_at).getTime(),
+      })),
+    ]
+
+    if (seenIds.current === null) {
+      // First load is history, not news.
+      seenIds.current = new Set(incoming.map((i) => i.id))
+    } else {
+      const fresh = incoming
+        .filter((i) => !seenIds.current.has(i.id) && Date.now() - i.at < 120000)
+        .sort((a, b) => b.at - a.at)
+      incoming.forEach((i) => seenIds.current.add(i.id))
+
+      const fromPartner = fresh.find((i) => i.memberId && i.memberId !== activeIdRef.current)
+      if (fromPartner) {
+        const who = (members.data ?? []).find((m) => m.id === fromPartner.memberId)
+        setNotice({
+          id: fromPartner.id,
+          name: who?.name ?? 'Someone',
+          text: fromPartner.text,
+        })
+      }
+    }
+
     setRows({
       household: household.data,
       members: members.data ?? [],
@@ -248,6 +321,12 @@ export function useCloudGame() {
     }
   }, [householdId, fetchRows])
 
+  useEffect(() => {
+    activeIdRef.current = activeId
+  }, [activeId])
+
+  const dismissNotice = useCallback(() => setNotice(null), [])
+
   const view = useMemo(() => project(rows, today), [rows, today])
 
   const start = useCallback(
@@ -309,51 +388,49 @@ export function useCloudGame() {
       // Unchecking claws points back out of the shared bank, so it has to cover them.
       if (checkedToday && view.balance < habit.points) return
 
-      if (checkedToday) {
-        const { error: deleteError } = await supabase
-          .from('habit_checks')
-          .delete()
-          .match({
-            household_id: householdId,
-            member_id: activeId,
-            habit_id: habit.id,
-            day: today,
-          })
-        if (deleteError) setError(deleteError.message)
-      } else {
-        const { error: insertError } = await supabase.from('habit_checks').insert({
-          household_id: householdId,
-          member_id: activeId,
-          habit_id: habit.id,
-          title: habit.title,
-          day: today,
-          points: habit.points,
-        })
-        if (insertError) setError(insertError.message)
-      }
+      await track(async () => {
+        const { error: writeError } = checkedToday
+          ? await supabase.from('habit_checks').delete().match({
+              household_id: householdId,
+              member_id: activeId,
+              habit_id: habit.id,
+              day: today,
+            })
+          : await supabase.from('habit_checks').insert({
+              household_id: householdId,
+              member_id: activeId,
+              habit_id: habit.id,
+              title: habit.title,
+              day: today,
+              points: habit.points,
+            })
+        if (writeError) throw writeError
+      })
 
       fetchRows(householdId)
     },
-    [householdId, activeId, today, view, fetchRows]
+    [householdId, activeId, today, view, fetchRows, track]
   )
 
   const redeem = useCallback(
     async (reward) => {
       if (!householdId) return
-      const { error: rpcError } = await supabase.rpc('redeem_reward', {
-        p_household: householdId,
-        p_member: activeId,
-        p_reward_id: reward.id,
-        p_title: reward.title,
-        p_cost: reward.cost,
-        p_icon: reward.icon,
-        p_hue: reward.hue,
-        p_tier: reward.tier,
+      await track(async () => {
+        const { error: rpcError } = await supabase.rpc('redeem_reward', {
+          p_household: householdId,
+          p_member: activeId,
+          p_reward_id: reward.id,
+          p_title: reward.title,
+          p_cost: reward.cost,
+          p_icon: reward.icon,
+          p_hue: reward.hue,
+          p_tier: reward.tier,
+        })
+        if (rpcError) throw rpcError
       })
-      if (rpcError) setError(rpcError.message)
       fetchRows(householdId)
     },
-    [householdId, activeId, fetchRows]
+    [householdId, activeId, fetchRows, track]
   )
 
   const claimTier = useCallback(
@@ -419,6 +496,20 @@ export function useCloudGame() {
     [householdId, fetchRows]
   )
 
+  // Editing a built-in stores an override row rather than changing code.
+  const editCatalogItem = useCallback(
+    async (kind, itemId, payload) => {
+      if (!householdId) return
+      const { error: upsertError } = await supabase.from('catalog_items').upsert(
+        { household_id: householdId, kind, item_id: itemId, hidden: false, payload },
+        { onConflict: 'household_id,kind,item_id' }
+      )
+      if (upsertError) setError(upsertError.message)
+      fetchRows(householdId)
+    },
+    [householdId, fetchRows]
+  )
+
   // Custom entries are dropped; built-ins are only switched off, since they
   // live in code and would come back on the next load anyway.
   const removeCatalogItem = useCallback(
@@ -444,17 +535,43 @@ export function useCloudGame() {
     [householdId, fetchRows]
   )
 
+  // habit_checks only holds positive points, so taking points back means
+  // deleting earlier grants rather than inserting a negative row.
   const devGrant = useCallback(
-    (points) =>
-      insertChecks([
-        {
-          habit_id: `dev-grant-${Date.now()}`,
-          title: 'Dev grant',
-          day: today,
-          points,
-        },
-      ]),
-    [insertChecks, today]
+    async (requested) => {
+      if (requested > 0) {
+        return insertChecks([
+          {
+            habit_id: `dev-grant-${Date.now()}`,
+            title: 'Dev grant',
+            day: today,
+            points: requested,
+          },
+        ])
+      }
+
+      let owed = Math.min(-requested, view.balance)
+      const grants = rows.checks
+        .filter((c) => c.habit_id.startsWith('dev-grant-'))
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+
+      const doomed = []
+      for (const grant of grants) {
+        if (owed <= 0) break
+        if (grant.points > owed) continue
+        doomed.push(grant.id)
+        owed -= grant.points
+      }
+
+      if (doomed.length === 0) return
+      const { error: deleteError } = await supabase
+        .from('habit_checks')
+        .delete()
+        .in('id', doomed)
+      if (deleteError) setError(deleteError.message)
+      fetchRows(householdId)
+    },
+    [insertChecks, today, view, rows, householdId, fetchRows]
   )
 
   const devCompleteDaily = useCallback(
@@ -559,7 +676,11 @@ export function useCloudGame() {
     claimTier,
     setCouponUsed,
     addCatalogItem,
+    editCatalogItem,
     removeCatalogItem,
+    status,
+    notice,
+    dismissNotice,
     dev: {
       grant: devGrant,
       completeDaily: devCompleteDaily,

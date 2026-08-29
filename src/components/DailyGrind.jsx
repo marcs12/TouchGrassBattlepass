@@ -9,7 +9,7 @@ import Window from './Window'
 const STRIP_DAYS = 7
 const WEEKDAY = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
-function HabitRow({ habit, done, blocked, editing, onToggle, onRemove }) {
+function HabitRow({ habit, done, blocked, editing, onToggle, onEdit, onRemove }) {
   return (
     <li>
       <button
@@ -48,14 +48,23 @@ function HabitRow({ habit, done, blocked, editing, onToggle, onRemove }) {
       </button>
 
       {editing && (
-        <button
-          type="button"
-          className="habit__remove"
-          aria-label={`Remove ${habit.title}`}
-          onClick={() => onRemove(habit.id, Boolean(habit.custom))}
-        >
-          <Icon name="trash" size={15} strokeWidth="1.9" />
-        </button>
+        <span className="habit__tools">
+          <button
+            type="button"
+            aria-label={`Edit ${habit.title}`}
+            onClick={() => onEdit(habit)}
+          >
+            <Icon name="pencil" size={14} strokeWidth="1.9" />
+          </button>
+          <button
+            type="button"
+            className="card__danger"
+            aria-label={`Remove ${habit.title}`}
+            onClick={() => onRemove(habit.id, Boolean(habit.custom))}
+          >
+            <Icon name="trash" size={14} strokeWidth="1.9" />
+          </button>
+        </span>
       )}
     </li>
   )
@@ -88,9 +97,11 @@ export default function DailyGrind({
   dailyGoal,
   onToggleHabit,
   onAddHabit,
+  onEditHabit,
   onRemoveHabit,
 }) {
   const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(null)
   const active = members.find((m) => m.id === activeId) ?? members[0]
   const partner = members.find((m) => m.id !== active.id)
 
@@ -122,6 +133,7 @@ export default function DailyGrind({
     blocked: !canUndo(habit),
     editing,
     onToggle: onToggleHabit,
+    onEdit: setDraft,
     onRemove: onRemoveHabit,
   })
 
@@ -167,6 +179,14 @@ export default function DailyGrind({
           </p>
         </div>
       </header>
+
+      {balance === 0 && banked === 0 && streak === 0 && (
+        <p className="firstrun">
+          <Icon name="spark" size={16} strokeWidth="1.9" />
+          Tick anything below to open the store. Clearing the whole daily list
+          starts your streak.
+        </p>
+      )}
 
       <Scoreboard
         members={members}
@@ -218,8 +238,28 @@ export default function DailyGrind({
         </button>
       </div>
 
-      {editing && (
-        <ItemForm kind="habit" onAdd={onAddHabit} onCancel={() => setEditing(false)} />
+      {draft ? (
+        <ItemForm
+          // Keyed so switching between adding and editing remounts the form
+          // rather than reusing the previous draft's state.
+          key={`edit-${draft.id}`}
+          kind="habit"
+          editing={draft}
+          onAdd={(payload) => {
+            onEditHabit(draft.id, payload)
+            setDraft(null)
+          }}
+          onCancel={() => setDraft(null)}
+        />
+      ) : (
+        editing && (
+          <ItemForm
+            key="add"
+            kind="habit"
+            onAdd={onAddHabit}
+            onCancel={() => setEditing(false)}
+          />
+        )
       )}
 
       <section className="habits">

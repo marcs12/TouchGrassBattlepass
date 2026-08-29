@@ -149,8 +149,12 @@ token, so adding a theme is one entry in that file and no CSS changes.
 Most of the time you don't need to touch the code. **Add** in the Daily Grind
 or the Store opens a small form - name, a line of detail, what it's worth, and
 an icon - and the entry is saved to the household, so both phones see it. The
-same toggle puts a remove button on every card: custom entries are deleted,
-built-ins are switched off (they live in code, so they can only be hidden).
+same toggle puts edit and remove buttons on every card.
+
+Editing works on anything, including the entries that ship in code: the change
+is stored as an override row rather than a code change, so a typo in a title
+or the wrong point value is a ten-second fix. Removing deletes a custom entry;
+a built-in is switched off instead, since it would come back on the next load.
 
 To change the defaults themselves:
 
@@ -183,6 +187,7 @@ What it gives you:
 | Clear daily list | Fills every daily habit for the active player in one tap |
 | Seed 6-day streak | Backfills cleared days so the streak strip has history |
 | Clear today / refetch | Undo a test run, or force a re-read in synced mode |
+| Grant or take back points | +10 through +2,500, and -10 through -100. Taking points back can't overdraw the bank |
 | Clear all points | Wipes points, receipts and claimed tiers back to a fresh bank. Asks twice, since in synced mode it hits both players |
 | Leave board / wipe local | Returns this device to setup without touching shared data |
 
@@ -196,6 +201,35 @@ spending functions, so the base schema gives them no delete policy. Without it
 the panel says what it could not remove rather than failing quietly. The day offset lives
 in `localStorage` under `tgbp.dev.offset` and only affects `today()` - stored
 dates are never rewritten.
+
+## Installing it on a phone
+
+It is a PWA, so it installs from the browser - no store, no Apple developer
+account, nothing to re-sign every week.
+
+- **iPhone** - open the site in Safari, Share, *Add to Home Screen*
+- **Android** - open in Chrome, menu, *Install app* (or *Add to home screen*)
+
+It then launches fullscreen with its own icon, and the status bar picks up the
+current theme's colour. A service worker caches the shell so it opens without
+a connection; the board itself is live data and is never served stale, so
+opening it offline shows the setup screen until the network is back. Offline
+queueing is still on the list.
+
+## Living with it
+
+A few things exist because two people share this on two phones:
+
+- **Partner toasts** - when the other phone checks something off, a toast says
+  who and what. Without it, realtime updates just make numbers change on their
+  own, which reads as a glitch.
+- **Sync dot** - next to the shared bank: saving, saved, or offline, so a tap
+  on a patchy connection doesn't leave you guessing.
+- **Haptics** - a short buzz on check-off and checkout. Android only; Safari on
+  iOS has no vibration API, so it degrades to nothing.
+- **Celebrations** - streaks at 3, 7, 14 and 30 days, and every claimed tier.
+  Milestones already passed are backfilled silently the first time, so nothing
+  throws a party for something you did last week.
 
 ## Still to do
 

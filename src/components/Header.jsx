@@ -3,6 +3,7 @@ import { useCountUp } from '../lib/useCountUp'
 import Icon from './Icon'
 import ThemePicker from './ThemePicker'
 import ProfileSwitcher from './ProfileSwitcher'
+import SyncDot from './SyncDot'
 
 // `short` keeps four tabs on one line once the labels stop fitting.
 const TABS = [
@@ -23,6 +24,7 @@ export default function Header({
   code,
   onSwitch,
   onLogoTap,
+  status,
 }) {
   const shown = useCountUp(balance)
   const [pop, setPop] = useState(null)
@@ -92,7 +94,10 @@ export default function Header({
         />
         <ThemePicker />
         <div className="bank">
-          <span className="bank__label label">Shared bank</span>
+          <span className="bank__label label">
+            Shared bank
+            <SyncDot status={status} />
+          </span>
           <span className="bank__value">
             <Icon name="coin" size={16} />
             {shown.toLocaleString()}

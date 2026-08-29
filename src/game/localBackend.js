@@ -190,6 +190,26 @@ export function useLocalGame() {
     })
   }, [])
 
+  // Editing a built-in stores an override row rather than changing code.
+  const editCatalogItem = useCallback((kind, itemId, payload) => {
+    setState((prev) => {
+      const existing = prev.catalog.find(
+        (c) => c.kind === kind && c.item_id === itemId
+      )
+      const next = existing
+        ? prev.catalog.map((c) =>
+            c.kind === kind && c.item_id === itemId
+              ? { ...c, hidden: false, payload: { ...c.payload, ...payload } }
+              : c
+          )
+        : [
+            ...prev.catalog,
+            { row: itemId, kind, item_id: itemId, hidden: false, payload },
+          ]
+      return { ...prev, catalog: next }
+    })
+  }, [])
+
   // Custom entries are dropped; built-ins are only switched off, since they
   // live in code and would come back on the next load anyway.
   const removeCatalogItem = useCallback((kind, itemId, isCustom) => {
@@ -207,9 +227,12 @@ export function useLocalGame() {
   // ---- developer tools -------------------------------------------------
   // Same surface as the cloud backend so the panel doesn't care which is live.
 
-  const devGrant = useCallback((points) => {
+  const devGrant = useCallback((requested) => {
     setState((prev) => {
       const who = prev.activeId
+      // Taking points back can't overdraw the bank.
+      const points = Math.max(requested, -prev.balance)
+      if (points === 0) return prev
       return {
         ...prev,
         balance: prev.balance + points,
@@ -219,7 +242,7 @@ export function useLocalGame() {
           {
             id: `dev-${Date.now()}`,
             memberId: who,
-            label: 'Dev grant',
+            label: points < 0 ? 'Dev deduction' : 'Dev grant',
             points,
             at: Date.now(),
           },
@@ -346,7 +369,12 @@ export function useLocalGame() {
     claimTier,
     setCouponUsed,
     addCatalogItem,
+    editCatalogItem,
     removeCatalogItem,
+    // Device-only mode has no partner to hear from and nothing to sync.
+    status: 'local',
+    notice: null,
+    dismissNotice: () => {},
     dev: {
       grant: devGrant,
       completeDaily: devCompleteDaily,
