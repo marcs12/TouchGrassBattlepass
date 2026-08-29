@@ -15,7 +15,9 @@ export function useCountUp(value, duration = 420) {
     const from = fromRef.current
     if (from === value) return
 
-    if (prefersReduced()) {
+    // A hidden tab pauses requestAnimationFrame, which would leave the number
+    // mid-roll until it comes back. Snap instead - nobody is watching anyway.
+    if (prefersReduced() || document.visibilityState === 'hidden') {
       fromRef.current = value
       setDisplay(value)
       return

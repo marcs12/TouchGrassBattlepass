@@ -14,7 +14,8 @@ create extension if not exists pgcrypto;
 create table if not exists households (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,
-  seed_balance integer not null default 2750,
+  -- A season starts empty; every point in the bank was earned by someone.
+  seed_balance integer not null default 0,
   created_at timestamptz not null default now()
 );
 

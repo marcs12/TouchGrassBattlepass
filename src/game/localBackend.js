@@ -11,7 +11,9 @@ import { loadState, saveState } from '../lib/storage'
 
 // Device-only mode. Used when no Supabase credentials are configured, and as
 // the shape both backends present to the UI.
-const STARTING_BALANCE = 2750
+//
+// A season starts empty: every point in the bank was earned by someone.
+const STARTING_BALANCE = 0
 const LOG_LIMIT = 40
 
 const freshState = () => ({
