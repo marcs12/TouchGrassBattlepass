@@ -416,6 +416,42 @@ export function useCloudGame() {
     [insertChecks, today]
   )
 
+  /**
+   * Wipes the economy back to a fresh board for both players. Habit checks
+   * always go; receipts and tier claims need the optional delete policies from
+   * supabase/dev-reset.sql, since normal play only ever inserts them through
+   * the spending functions. Reports what it could not remove rather than
+   * failing silently.
+   */
+  const devClearPoints = useCallback(async () => {
+    if (!householdId) return { cleared: [], kept: [] }
+
+    const wipe = async (table) => {
+      const { error: wipeError } = await supabase
+        .from(table)
+        .delete()
+        .eq('household_id', householdId)
+      return wipeError ? null : table
+    }
+
+    const results = await Promise.all(
+      ['habit_checks', 'redemptions', 'tier_claims'].map(wipe)
+    )
+
+    const names = {
+      habit_checks: 'points',
+      redemptions: 'receipts',
+      tier_claims: 'tier claims',
+    }
+    const cleared = results.filter(Boolean).map((t) => names[t])
+    const kept = Object.keys(names)
+      .filter((t) => !results.includes(t))
+      .map((t) => names[t])
+
+    fetchRows(householdId)
+    return { cleared, kept }
+  }, [householdId, fetchRows])
+
   // Drops this device off the board without touching the shared data.
   const devForget = useCallback(async () => {
     await supabase.auth.signOut()
@@ -446,6 +482,7 @@ export function useCloudGame() {
       grant: devGrant,
       completeDaily: devCompleteDaily,
       clearToday: devClearToday,
+      clearPoints: devClearPoints,
       seedHistory: devSeedHistory,
       forget: devForget,
       refresh: () => fetchRows(householdId),

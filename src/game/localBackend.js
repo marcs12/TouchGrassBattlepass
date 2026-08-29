@@ -243,6 +243,20 @@ export function useLocalGame() {
     })
   }, [])
 
+  // Wipes the economy back to a fresh board, keeping the players and theme.
+  const devClearPoints = useCallback(async () => {
+    setState((prev) => ({
+      ...prev,
+      balance: STARTING_BALANCE,
+      earned: Object.fromEntries(prev.members.map((m) => [m.id, 0])),
+      redeemed: [],
+      log: [],
+      grind: { ...prev.grind, done: {}, goalDates: {} },
+      season: { xp: 0, claimed: [] },
+    }))
+    return { cleared: ['points', 'receipts', 'tier claims'], kept: [] }
+  }, [])
+
   const devForget = useCallback(() => {
     try {
       localStorage.removeItem('tgbp.state')
@@ -269,6 +283,7 @@ export function useLocalGame() {
       grant: devGrant,
       completeDaily: devCompleteDaily,
       clearToday: devClearToday,
+      clearPoints: devClearPoints,
       seedHistory: devSeedHistory,
       forget: devForget,
       refresh: null,

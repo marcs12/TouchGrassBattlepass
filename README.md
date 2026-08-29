@@ -164,10 +164,17 @@ What it gives you:
 | Clear daily list | Fills every daily habit for the active player in one tap |
 | Seed 6-day streak | Backfills cleared days so the streak strip has history |
 | Clear today / refetch | Undo a test run, or force a re-read in synced mode |
+| Clear all points | Wipes points, receipts and claimed tiers back to a fresh bank. Asks twice, since in synced mode it hits both players |
 | Leave board / wipe local | Returns this device to setup without touching shared data |
 
 Everything writes through the normal data path, so in synced mode a seeded day
-shows up on the other phone exactly like a real check-off. The day offset lives
+shows up on the other phone exactly like a real check-off.
+
+In synced mode, "clear all points" always removes habit checks, but receipts
+and claimed tiers need the optional delete policies in
+`supabase/dev-reset.sql` - normal play only ever inserts those through the
+spending functions, so the base schema gives them no delete policy. Without it
+the panel says what it could not remove rather than failing quietly. The day offset lives
 in `localStorage` under `tgbp.dev.offset` and only affects `today()` - stored
 dates are never rewritten.
 
