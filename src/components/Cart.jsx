@@ -2,7 +2,15 @@ import Icon from './Icon'
 
 // The cart is deliberately device-local: it's a shopping session, not shared
 // state. Nothing leaves it until checkout, which redeems each line for real.
-export default function Cart({ lines, rewards, balance, onChange, onCheckout, busy }) {
+export default function Cart({
+  lines,
+  rewards,
+  balance,
+  onChange,
+  onCheckout,
+  busy,
+  offline,
+}) {
   const items = lines
     .map((line) => ({ ...line, reward: rewards.find((r) => r.id === line.id) }))
     .filter((line) => line.reward)
@@ -78,10 +86,21 @@ export default function Cart({ lines, rewards, balance, onChange, onCheckout, bu
         <button
           type="button"
           className="btn"
-          disabled={!affordable || busy}
+          disabled={!affordable || busy || offline}
           onClick={onCheckout}
+          title={
+            offline
+              ? 'Checkout needs a connection - the bank is checked on the server'
+              : undefined
+          }
         >
-          {busy ? 'Redeeming…' : affordable ? 'Checkout' : `Need ${short.toLocaleString()}`}
+          {offline
+            ? 'Offline'
+            : busy
+              ? 'Redeeming…'
+              : affordable
+                ? 'Checkout'
+                : `Need ${short.toLocaleString()}`}
         </button>
       </footer>
     </section>

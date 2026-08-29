@@ -159,6 +159,7 @@ export default function App() {
           onSwitch={game.switchMember}
           onLogoTap={dev.registerTap}
           status={game.status}
+          pending={game.pending}
         />
 
         <main className="app__main">
@@ -219,6 +220,7 @@ export default function App() {
                 onCart={setCart}
                 onCheckout={checkout}
                 checkingOut={checkingOut}
+                offline={game.status === 'offline'}
                 onAddReward={(payload) => game.addCatalogItem('reward', payload)}
                 onEditReward={(id, payload) =>
                   game.editCatalogItem('reward', id, payload)

@@ -130,6 +130,7 @@ src/
   lib/
     supabase.js            client + hasCloud flag
     day.js                 local-date keys, streak math
+    queue.js               offline board cache and write queue
     storage.js             local persistence
     useCountUp.js          rolling number animation
   theme/                   token definitions + provider
@@ -212,9 +213,19 @@ account, nothing to re-sign every week.
 
 It then launches fullscreen with its own icon, and the status bar picks up the
 current theme's colour. A service worker caches the shell so it opens without
-a connection; the board itself is live data and is never served stale, so
-opening it offline shows the setup screen until the network is back. Offline
-queueing is still on the list.
+a connection.
+
+### Offline
+
+The last board you saw is cached, so opening the app with no signal shows your
+grind rather than the setup screen. Check-offs, coupon uses and catalog edits
+are queued locally, applied to the screen straight away, and replayed in order
+when the connection returns - the sync dot shows how many are waiting.
+
+Spending is the exception. Redeeming a reward and claiming a tier are checked
+against the bank inside a server transaction, so queuing them would let two
+phones overdraw the same balance while both were offline. Those stay
+online-only, and the checkout button says so.
 
 ## Living with it
 
@@ -233,6 +244,5 @@ A few things exist because two people share this on two phones:
 
 ## Still to do
 
-- Editing an existing habit or reward, rather than removing and re-adding it
-- Offline queueing, so a check-off made with no signal syncs when it returns
 - Season end and rollover into Season 2
+- A weekly view: points per day, who did what

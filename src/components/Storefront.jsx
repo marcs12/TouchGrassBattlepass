@@ -27,6 +27,7 @@ export default function Storefront({
   onCart,
   onCheckout,
   checkingOut,
+  offline,
   onAddReward,
   onEditReward,
   onRemoveReward,
@@ -190,6 +191,7 @@ export default function Storefront({
         onChange={onCart}
         onCheckout={onCheckout}
         busy={checkingOut}
+        offline={offline}
       />
 
       {visible.length === 0 ? (
