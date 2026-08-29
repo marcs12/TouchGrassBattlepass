@@ -227,6 +227,20 @@ against the bank inside a server transaction, so queuing them would let two
 phones overdraw the same balance while both were offline. Those stay
 online-only, and the checkout button says so.
 
+## Progress
+
+The Season Pass tab opens with a chart of points per day, stacked by player,
+over the last week or month, plus days with points, full lists cleared, the
+daily average and the best current streak. Hovering or focusing a bar reads
+out that day, and *See the numbers* opens the same data as a table.
+
+Chart colours are their own tokens rather than the app's pastels. As a
+categorical pair the pastels failed separation checks - too light, too close
+to tell apart even with full colour vision - so the series use a rose/blue pair
+validated for the lightness band, chroma, colour-blind separation and contrast
+in both light and dark themes. Identity never rests on colour alone: there is
+a legend, a hover readout and the table.
+
 ## Living with it
 
 A few things exist because two people share this on two phones:
@@ -245,4 +259,3 @@ A few things exist because two people share this on two phones:
 ## Still to do
 
 - Season end and rollover into Season 2
-- A weekly view: points per day, who did what

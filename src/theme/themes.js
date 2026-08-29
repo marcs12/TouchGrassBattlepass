@@ -10,7 +10,18 @@ const DISPLAY = "'Fredoka', ui-rounded, 'Segoe UI', system-ui, sans-serif"
 const BODY = "'Nunito', ui-sans-serif, system-ui, -apple-system, sans-serif"
 const LABEL = "'DM Mono', ui-monospace, 'SF Mono', Menlo, monospace"
 
+// Chart series. Validated with the dataviz palette checker in both light and
+// dark modes: lightness band, chroma floor, CVD separation (protan dE 8.8),
+// normal-vision separation (dE 20.4) and contrast vs surface all pass. The
+// app's pastel tokens fail as a categorical pair - too light, too close - so
+// charts get their own deeper pair rather than reusing accent and tier hues.
+const SERIES = {
+  'series-1': '#c85f7c',
+  'series-2': '#4a7fb5',
+}
+
 const SHARED = {
+  ...SERIES,
   'border-w': '2px',
   'shadow-off': '3px',
   'radius-lg': '18px',

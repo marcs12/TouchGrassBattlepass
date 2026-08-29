@@ -56,6 +56,6 @@ export const streakFrom = (goalDates, today = dayKey()) => {
   return streak
 }
 
-/** The last `count` days, oldest first - for the streak strip. */
+/** The last `count` days, oldest first - for the streak strip and charts. */
 export const recentDays = (count, today = dayKey()) =>
   Array.from({ length: count }, (_, i) => shiftDay(today, i - (count - 1)))

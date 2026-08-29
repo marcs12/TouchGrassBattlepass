@@ -198,6 +198,9 @@ export default function App() {
             {tab === 'season' && (
               <SeasonPass
                 season={game.season}
+                history={game.history}
+                members={game.members}
+                grind={game.grind}
                 onClaimTier={(tier) => {
                   successFeedback()
                   game.claimTier(tier)

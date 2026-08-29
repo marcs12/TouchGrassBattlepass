@@ -7,7 +7,7 @@ import {
   rewardsFrom,
   slugify,
 } from '../data/catalog'
-import { shiftDay, today as todayKey } from '../lib/day'
+import { recentDays, shiftDay, today as todayKey } from '../lib/day'
 import {
   applyPending,
   cacheRows,
@@ -75,6 +75,19 @@ function project(rows, today) {
       goalDates[memberId] = [...(goalDates[memberId] ?? []), day]
     }
   }
+
+  // Points per member per day, for the progress chart. Derived from the same
+  // checks the balance comes from, so the two can never disagree.
+  const byDay = new Map()
+  for (const check of checks) {
+    const day = byDay.get(check.day) ?? {}
+    day[check.member_id] = (day[check.member_id] ?? 0) + check.points
+    byDay.set(check.day, day)
+  }
+  const history = recentDays(HISTORY_DAYS, today).map((day) => ({
+    day,
+    totals: byDay.get(day) ?? {},
+  }))
 
   const spent = redemptions.reduce((sum, r) => sum + r.cost, 0)
   const bonuses = claims.reduce((sum, c) => sum + (c.bonus ?? 0), 0)
