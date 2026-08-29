@@ -1,8 +1,16 @@
 import { TIERS } from '../data/rewards'
 import Icon from './Icon'
 
-export default function RewardCard({ reward, balance, owned, onRedeem }) {
-  const tier = TIERS[reward.tier]
+export default function RewardCard({
+  reward,
+  balance,
+  owned,
+  inCart,
+  editing,
+  onAdd,
+  onRemove,
+}) {
+  const tier = TIERS[reward.tier] ?? TIERS.low
   const affordable = balance >= reward.cost
   const short = reward.cost - balance
   const progress = Math.min(100, Math.round((balance / reward.cost) * 100))
@@ -15,10 +23,26 @@ export default function RewardCard({ reward, balance, owned, onRedeem }) {
       <div className="card__art">
         <Icon name={reward.icon} size={54} strokeWidth="1.9" />
         <span className="card__tier">{tier.label}</span>
-        {owned > 0 && (
-          <span className="card__owned">
-            <Icon name="check" size={11} />×{owned}
+        {inCart > 0 ? (
+          <span className="card__owned card__owned--cart">
+            <Icon name="cart" size={12} />×{inCart}
           </span>
+        ) : (
+          owned > 0 && (
+            <span className="card__owned">
+              <Icon name="check" size={12} />×{owned}
+            </span>
+          )
+        )}
+        {editing && (
+          <button
+            type="button"
+            className="card__remove"
+            aria-label={`Remove ${reward.title}`}
+            onClick={() => onRemove(reward.id, Boolean(reward.custom))}
+          >
+            <Icon name="trash" size={15} strokeWidth="1.9" />
+          </button>
         )}
       </div>
 
@@ -53,11 +77,14 @@ export default function RewardCard({ reward, balance, owned, onRedeem }) {
           <button
             type="button"
             className="btn"
-            onClick={() => onRedeem(reward)}
+            onClick={() => onAdd(reward)}
             disabled={!affordable}
           >
             {affordable ? (
-              'Redeem'
+              <>
+                <Icon name="cart" size={14} strokeWidth="1.9" />
+                Add
+              </>
             ) : (
               <>
                 <Icon name="lock" size={13} />

@@ -16,7 +16,27 @@ const Row = ({ label, children }) => (
 export default function DevPanel({ game, onClose }) {
   const [offset, setOffset] = useState(getDayOffset())
   const [open, setOpen] = useState(true)
+  // Wiping the board hits both players in synced mode, so it asks twice.
+  const [armed, setArmed] = useState(false)
+  const [wipeNote, setWipeNote] = useState(null)
   const dev = game.dev ?? {}
+
+  const clearPoints = async () => {
+    if (!armed) {
+      setArmed(true)
+      return
+    }
+    setArmed(false)
+    const result = await dev.clearPoints?.()
+    if (!result) return
+    setWipeNote(
+      result.kept?.length
+        ? `Cleared ${result.cleared.join(', ') || 'nothing'}. Kept ${result.kept.join(
+            ', '
+          )} - run supabase/dev-reset.sql to allow those too.`
+        : `Cleared ${result.cleared.join(', ')}.`
+    )
+  }
 
   const travel = (days) => {
     const next = offset + days
@@ -121,6 +141,30 @@ export default function DevPanel({ game, onClose }) {
               </button>
             )}
           </div>
+        </section>
+
+        <section className="dev__group">
+          <p className="label">Reset</p>
+          <div className="dev__buttons">
+            <button
+              type="button"
+              className={`dev__btn ${armed ? 'dev__btn--danger' : ''}`}
+              onClick={clearPoints}
+            >
+              {armed ? 'tap again to wipe' : 'clear all points'}
+            </button>
+            {armed && (
+              <button type="button" className="dev__btn" onClick={() => setArmed(false)}>
+                cancel
+              </button>
+            )}
+          </div>
+          <p className="dev__hint">
+            {game.mode === 'cloud'
+              ? 'Wipes points, receipts and tier claims for both players, back to a fresh bank.'
+              : 'Wipes points, receipts and tier claims back to a fresh bank.'}
+          </p>
+          {wipeNote && <p className="dev__hint">{wipeNote}</p>}
         </section>
 
         <section className="dev__group">

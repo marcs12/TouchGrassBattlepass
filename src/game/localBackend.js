@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { BONUS_HABITS, DAILY_HABITS } from '../data/habits'
+import {
+  bonusHabitsFrom,
+  dailyHabitsFrom,
+  hueFor,
+  rewardsFrom,
+  slugify,
+} from '../data/catalog'
 import { shiftDay, today } from '../lib/day'
 import { loadState, saveState } from '../lib/storage'
 
@@ -17,6 +23,8 @@ const freshState = () => ({
   grind: { date: today(), done: {}, goalDates: {} },
   season: { xp: 0, claimed: [] },
   log: [],
+  // Habits and rewards added in the app, plus hidden built-ins.
+  catalog: [],
 })
 
 const normalize = (state) => {
@@ -26,6 +34,7 @@ const normalize = (state) => {
     ...state,
     earned: { ...base.earned, ...state.earned },
     log: state.log ?? base.log,
+    catalog: state.catalog ?? [],
     grind: { ...base.grind, ...state.grind },
     season: { ...base.season, ...state.season },
   }
@@ -108,7 +117,8 @@ export function useLocalGame() {
       else done.add(habit.id)
 
       const goalDates = new Set(prev.grind.goalDates[who] ?? [])
-      if (DAILY_HABITS.every((h) => done.has(h.id))) goalDates.add(prev.grind.date)
+      if (dailyHabitsFrom(prev.catalog).every((h) => done.has(h.id)))
+        goalDates.add(prev.grind.date)
       else goalDates.delete(prev.grind.date)
 
       const delta = undoing ? -habit.points : habit.points
@@ -150,6 +160,48 @@ export function useLocalGame() {
     })
   }, [])
 
+  const setCouponUsed = useCallback((receiptId, used) => {
+    setState((prev) => ({
+      ...prev,
+      redeemed: prev.redeemed.map((r) =>
+        r.receiptId === receiptId ? { ...r, usedAt: used ? Date.now() : null } : r
+      ),
+    }))
+  }, [])
+
+  const addCatalogItem = useCallback((kind, payload) => {
+    setState((prev) => {
+      const itemId = slugify(payload.title)
+      return {
+        ...prev,
+        catalog: [
+          ...prev.catalog,
+          {
+            row: itemId,
+            kind,
+            item_id: itemId,
+            hidden: false,
+            payload: { ...payload, hue: hueFor(itemId) },
+          },
+        ],
+      }
+    })
+  }, [])
+
+  // Custom entries are dropped; built-ins are only switched off, since they
+  // live in code and would come back on the next load anyway.
+  const removeCatalogItem = useCallback((kind, itemId, isCustom) => {
+    setState((prev) => ({
+      ...prev,
+      catalog: isCustom
+        ? prev.catalog.filter((c) => !(c.kind === kind && c.item_id === itemId))
+        : [
+            ...prev.catalog.filter((c) => !(c.kind === kind && c.item_id === itemId)),
+            { row: itemId, kind, item_id: itemId, hidden: true, payload: null },
+          ],
+    }))
+  }, [])
+
   // ---- developer tools -------------------------------------------------
   // Same surface as the cloud backend so the panel doesn't care which is live.
 
@@ -179,7 +231,7 @@ export function useLocalGame() {
     setState((prev) => {
       const who = prev.activeId
       const done = new Set(prev.grind.done[who] ?? [])
-      const missing = DAILY_HABITS.filter((h) => !done.has(h.id))
+      const missing = dailyHabitsFrom(prev.catalog).filter((h) => !done.has(h.id))
       if (missing.length === 0) return prev
 
       const points = missing.reduce((sum, h) => sum + h.points, 0)
@@ -205,7 +257,10 @@ export function useLocalGame() {
     setState((prev) => {
       const who = prev.activeId
       const done = prev.grind.done[who] ?? []
-      const all = [...DAILY_HABITS, ...BONUS_HABITS]
+      const all = [
+        ...dailyHabitsFrom(prev.catalog),
+        ...bonusHabitsFrom(prev.catalog),
+      ]
       const points = done.reduce(
         (sum, id) => sum + (all.find((h) => h.id === id)?.points ?? 0),
         0
@@ -243,6 +298,20 @@ export function useLocalGame() {
     })
   }, [])
 
+  // Wipes the economy back to a fresh board, keeping the players and theme.
+  const devClearPoints = useCallback(async () => {
+    setState((prev) => ({
+      ...prev,
+      balance: STARTING_BALANCE,
+      earned: Object.fromEntries(prev.members.map((m) => [m.id, 0])),
+      redeemed: [],
+      log: [],
+      grind: { ...prev.grind, done: {}, goalDates: {} },
+      season: { xp: 0, claimed: [] },
+    }))
+    return { cleared: ['points', 'receipts', 'tier claims'], kept: [] }
+  }, [])
+
   const devForget = useCallback(() => {
     try {
       localStorage.removeItem('tgbp.state')
@@ -252,9 +321,17 @@ export function useLocalGame() {
     location.reload()
   }, [])
 
+  const dailyHabits = dailyHabitsFrom(state.catalog)
+  const bonusHabits = bonusHabitsFrom(state.catalog)
+  const rewards = rewardsFrom(state.catalog)
+
   return {
     mode: 'local',
     ready: true,
+    dailyHabits,
+    bonusHabits,
+    dailyGoal: dailyHabits.reduce((sum, h) => sum + h.points, 0),
+    rewards,
     error: null,
     code: null,
     ...state,
@@ -265,10 +342,14 @@ export function useLocalGame() {
     toggleHabit,
     redeem,
     claimTier,
+    setCouponUsed,
+    addCatalogItem,
+    removeCatalogItem,
     dev: {
       grant: devGrant,
       completeDaily: devCompleteDaily,
       clearToday: devClearToday,
+      clearPoints: devClearPoints,
       seedHistory: devSeedHistory,
       forget: devForget,
       refresh: null,

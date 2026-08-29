@@ -12,11 +12,40 @@ import { ThemeProvider } from './theme/ThemeProvider'
 import { useGame } from './game/useGame'
 import { useDevMode } from './game/useDevMode'
 import DevPanel from './components/DevPanel'
+import PurchaseOverlay from './components/PurchaseOverlay'
 
 export default function App() {
   const game = useGame()
   const dev = useDevMode()
   const [tab, setTab] = useState('grind')
+  // The cart is a shopping session on this device, not shared state.
+  const [cart, setCart] = useState([])
+  const [checkingOut, setCheckingOut] = useState(false)
+  const [purchase, setPurchase] = useState(null)
+
+  const checkout = async () => {
+    const items = cart
+      .map((line) => ({ ...game.rewards.find((r) => r.id === line.id), qty: line.qty }))
+      .filter((item) => item.id)
+    if (items.length === 0) return
+
+    setCheckingOut(true)
+    try {
+      // One redemption per unit, so each lands as its own coupon.
+      for (const item of items) {
+        for (let n = 0; n < item.qty; n += 1) {
+          await game.redeem(item)
+        }
+      }
+      setCart([])
+      setPurchase({
+        items,
+        total: items.reduce((sum, i) => sum + i.cost * i.qty, 0),
+      })
+    } finally {
+      setCheckingOut(false)
+    }
+  }
 
   const shell = (children) => (
     <ThemeProvider>
@@ -58,7 +87,7 @@ export default function App() {
           balance={game.balance}
           tab={tab}
           onTab={setTab}
-          redeemedCount={game.redeemed.length}
+          redeemedCount={game.redeemed.filter((r) => !r.usedAt).length}
           members={game.members}
           activeId={game.activeId}
           earned={game.earned}
@@ -84,7 +113,14 @@ export default function App() {
                 earned={game.earned}
                 balance={game.balance}
                 log={game.log}
+                dailyHabits={game.dailyHabits}
+                bonusHabits={game.bonusHabits}
+                dailyGoal={game.dailyGoal}
                 onToggleHabit={game.toggleHabit}
+                onAddHabit={(payload) => game.addCatalogItem('habit', payload)}
+                onRemoveHabit={(id, custom) =>
+                  game.removeCatalogItem('habit', id, custom)
+                }
               />
             )}
             {tab === 'season' && (
@@ -94,14 +130,30 @@ export default function App() {
               <Storefront
                 balance={game.balance}
                 redeemed={game.redeemed}
-                onRedeem={game.redeem}
+                rewards={game.rewards}
+                cart={cart}
+                onCart={setCart}
+                onCheckout={checkout}
+                checkingOut={checkingOut}
+                onAddReward={(payload) => game.addCatalogItem('reward', payload)}
+                onRemoveReward={(id, custom) =>
+                  game.removeCatalogItem('reward', id, custom)
+                }
               />
             )}
             {tab === 'redeemed' && (
-              <Redeemed redeemed={game.redeemed} members={game.members} />
+              <Redeemed
+                redeemed={game.redeemed}
+                members={game.members}
+                onUse={game.setCouponUsed}
+              />
             )}
           </div>
         </main>
+
+        {purchase && (
+          <PurchaseOverlay purchase={purchase} onDone={() => setPurchase(null)} />
+        )}
 
         {dev.on && <DevPanel game={game} onClose={dev.disable} />}
       </div>

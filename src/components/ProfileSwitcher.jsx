@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { usePopover } from '../lib/usePopover'
 import Icon from './Icon'
 
 const initial = (name) => name.trim().charAt(0).toUpperCase()
@@ -15,6 +16,8 @@ export default function ProfileSwitcher({
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
   const buttonRef = useRef(null)
+  const menuRef = useRef(null)
+  const menuStyle = usePopover(buttonRef, menuRef, open)
   const active = members.find((m) => m.id === activeId) ?? members[0]
 
   useEffect(() => {
@@ -59,7 +62,7 @@ export default function ProfileSwitcher({
       </button>
 
       {open && (
-        <div className="themer__menu" role="menu" aria-label="Who is checking off">
+        <div ref={menuRef} style={menuStyle} className="themer__menu" role="menu" aria-label="Who is checking off">
           <p className="themer__heading label">Playing as</p>
           {members.map((m) => {
             const on = m.id === active.id

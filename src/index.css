@@ -210,6 +210,7 @@ h3 {
   align-items: center;
   justify-content: center;
   gap: 7px;
+  min-width: 0;
   min-height: 42px;
   padding: 8px 14px;
   border: var(--border-w) solid transparent;
@@ -234,6 +235,9 @@ h3 {
 }
 
 .tab__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -315,11 +319,13 @@ h3 {
 }
 
 .themer__menu {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
+  /* Placed by usePopover, which clamps it into the viewport. */
+  position: fixed;
   z-index: var(--z-pop);
   width: 252px;
+  max-width: calc(100vw - 20px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 8px;
   border-radius: var(--radius-lg);
   border: var(--border-w) solid var(--ink);
@@ -1685,10 +1691,440 @@ h3 {
   box-shadow: 2px 2px 0 var(--shadow-color);
 }
 
+/* ---------- cart ---------- */
+
+.cart {
+  margin-bottom: 20px;
+  border-radius: var(--radius-lg);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--shadow-color);
+  animation: row-in 0.24s var(--ease) both;
+}
+
+.cart__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  border-bottom: var(--border-w) dashed var(--line);
+  font-size: 15px;
+}
+
+.cart__clear {
+  margin-left: auto;
+  padding: 4px 10px;
+  border-radius: var(--pill);
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-family: var(--font-label);
+  font-size: 11px;
+}
+
+.cart__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  list-style: none;
+}
+
+.cart__line {
+  display: grid;
+  grid-template-columns: 34px 1fr auto auto;
+  align-items: center;
+  gap: 11px;
+}
+
+.cart__art {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--ink);
+  background: hsl(var(--h) var(--art-s) var(--art-l));
+  color: var(--art-ink);
+}
+
+.cart__name {
+  font-size: 14px;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cart__qty {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: var(--pill);
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+}
+
+.cart__qty button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--pill);
+  background: transparent;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.cart__qty b {
+  min-width: 20px;
+  text-align: center;
+  font-family: var(--font-label);
+  font-size: 13px;
+}
+
+.cart__cost {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cart__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-top: var(--border-w) dashed var(--line);
+}
+
+.cart__total {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+}
+
+.cart__total strong {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+}
+
+.card__owned--cart {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.card__remove,
+.habit__remove {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+  color: var(--danger);
+}
+
+.card__remove {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1;
+}
+
+.habit__remove {
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  box-shadow: 2px 2px 0 var(--shadow-color);
+}
+
+.habits__list > li {
+  position: relative;
+}
+
+/* ---------- purchase ---------- */
+
+.paid {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
+  animation: view-in 0.2s var(--ease) both;
+}
+
+.paid__receipt {
+  position: relative;
+  width: min(360px, 100%);
+  display: grid;
+  gap: 10px;
+  padding: 20px 18px 18px;
+  border-radius: var(--radius-lg);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface);
+  box-shadow: 6px 6px 0 var(--shadow-color);
+  animation: print 0.42s var(--ease) both;
+}
+
+@keyframes print {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.96);
+  }
+}
+
+.paid__eyebrow {
+  margin: 0;
+}
+
+.paid__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 0;
+  list-style: none;
+  border-top: var(--border-w) dashed var(--line);
+  border-bottom: var(--border-w) dashed var(--line);
+}
+
+.paid__list li {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  animation: row-in 0.3s var(--ease) both;
+}
+
+.paid__list li:nth-child(2) {
+  animation-delay: 80ms;
+}
+
+.paid__list li:nth-child(n + 3) {
+  animation-delay: 150ms;
+}
+
+.paid__art {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--ink);
+  background: hsl(var(--h) var(--art-s) var(--art-l));
+  color: var(--art-ink);
+}
+
+.paid__name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.paid__cost,
+.paid__total strong {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.paid__total {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+}
+
+.paid__total strong {
+  font-size: 22px;
+}
+
+/* Lands late and crooked, like a stamp actually hitting the paper. */
+.paid__stamp {
+  position: absolute;
+  right: 14px;
+  bottom: 58px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 2.5px solid var(--danger);
+  color: var(--danger);
+  font-family: var(--font-label);
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: rotate(-9deg);
+  animation: slam 0.4s var(--ease) 0.42s both;
+}
+
+@keyframes slam {
+  0% {
+    opacity: 0;
+    transform: rotate(-24deg) scale(2.4);
+  }
+  70% {
+    opacity: 1;
+    transform: rotate(-7deg) scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-9deg) scale(1);
+  }
+}
+
+.paid__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* ---------- coupons ---------- */
+
+.coupons {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.coupon {
+  display: grid;
+  grid-template-columns: 44px 1fr auto auto;
+  align-items: center;
+  gap: 13px;
+  padding: 11px 13px;
+  border-radius: var(--radius-md);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--shadow-color);
+  animation: row-in 0.26s var(--ease) both;
+}
+
+.coupon--used {
+  background: var(--surface-2);
+  border-style: dashed;
+  box-shadow: none;
+  opacity: 0.62;
+}
+
+.coupon--used .coupon__art {
+  filter: saturate(0.15);
+}
+
+.coupon--used .coupon__meta strong {
+  text-decoration: line-through;
+}
+
+.coupon__art {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--ink);
+  background: hsl(var(--h) var(--art-s) var(--art-l));
+  color: var(--art-ink);
+}
+
+.coupon__meta {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.coupon__meta strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.coupon__sub {
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.coupon__cost {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--danger);
+  white-space: nowrap;
+}
+
+/* ---------- add habit / reward form ---------- */
+
+.itemform {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: var(--border-w) dashed var(--ink);
+  background: var(--surface-2);
+  animation: row-in 0.24s var(--ease) both;
+}
+
+.itemform__row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.itemform__icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.itemform__icons legend {
+  margin-bottom: 6px;
+}
+
+.itemform__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.itemform__icon--on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.itemform__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.controls--tight {
+  margin-bottom: 14px;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
 /* ---------- breakpoints ---------- */
 
-/* four tabs stop fitting their full labels before they stop fitting at all */
-@media (max-width: 560px) {
+/* Four tabs only wear their full labels once the menubar is a single wide
+   row; below that the short ones keep the brand from being clipped. */
+@media (max-width: 1279px) {
   .tab__label {
     display: none;
   }
@@ -1705,15 +2141,41 @@ h3 {
   }
 }
 
-/* narrow phones - keep the tab row on one line */
-@media (max-width: 400px) {
+/* Smallest phones and cover screens. */
+@media (max-width: 380px) {
+  .tab {
+    font-size: 12px;
+  }
+
+  .tabs {
+    gap: 5px;
+  }
+}
+
+/* Short labels need the whole tab to themselves until the row is wide -
+   including the space the receipts badge would otherwise take. */
+@media (max-width: 560px) {
+  .tab {
+    position: relative;
+  }
+
+  .tab__badge {
+    position: absolute;
+    top: 3px;
+    right: 5px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+  }
+
   .brand__season {
     display: none;
   }
 
   .tab {
     gap: 5px;
-    padding: 8px 8px;
+    padding: 8px 6px;
     font-size: 13px;
   }
 
@@ -1738,6 +2200,19 @@ h3 {
     grid-template-columns: auto 1fr auto;
   }
 
+  .coupon {
+    grid-template-columns: 40px 1fr auto;
+  }
+
+  .coupon__btn {
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
+
+  .itemform__row {
+    grid-template-columns: 1fr;
+  }
+
   .streak {
     justify-content: center;
   }
@@ -1749,20 +2224,10 @@ h3 {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  /* Only split into two columns when there is actually a side panel -
-     otherwise a lone heading gets squeezed into the leftover 1fr. */
-  .store__head:has(.nextup) {
-    grid-template-columns: 1fr minmax(240px, 300px);
-    align-items: stretch;
-    gap: 20px;
-  }
-
-  .themer__btn-text {
+  /* Only the profile name comes back here; the theme name and the bank
+     label would crowd the brand until there is a lot more room. */
+  .profile__btn .themer__btn-text {
     display: inline;
-  }
-
-  .bank__label {
-    display: block;
   }
 
   .app__main {
@@ -1774,8 +2239,33 @@ h3 {
   }
 }
 
+/* wide enough for the heading and its side panel to sit together */
+@media (min-width: 860px) {
+  /* Only split when there is actually a side panel - otherwise a lone
+     heading gets squeezed into the leftover 1fr. */
+  .store__head:has(.nextup) {
+    grid-template-columns: 1fr minmax(240px, 300px);
+    align-items: stretch;
+    gap: 20px;
+  }
+}
+
 /* small laptop */
 @media (min-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .bank {
+    display: grid;
+    justify-items: end;
+    gap: 0;
+  }
+}
+
+/* The menubar only collapses to one row once the brand, the tabs and the
+   chips all fit across it - below this the brand was being clipped. */
+@media (min-width: 1120px) {
   .menubar {
     grid-template-columns: auto 1fr auto;
     grid-template-areas: 'brand tabs right';
@@ -1785,21 +2275,23 @@ h3 {
 
   .tabs {
     justify-self: center;
-    grid-auto-columns: minmax(128px, auto);
-  }
-
-  .grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-auto-columns: minmax(110px, auto);
   }
 
   .brand__name {
     font-size: 17px;
   }
+}
 
-  .bank {
-    display: grid;
-    justify-items: end;
-    gap: 0;
+/* Widest layout: the brand, four full tab labels and three labelled chips
+   all fit on one row, so let them wear their full text. */
+@media (min-width: 1280px) {
+  .themer__btn-text {
+    display: inline;
+  }
+
+  .bank__label {
+    display: block;
   }
 }
 

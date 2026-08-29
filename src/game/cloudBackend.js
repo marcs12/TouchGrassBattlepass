@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { DAILY_HABITS } from '../data/habits'
+import {
+  bonusHabitsFrom,
+  dailyHabitsFrom,
+  hueFor,
+  rewardsFrom,
+  slugify,
+} from '../data/catalog'
 import { shiftDay, today as todayKey } from '../lib/day'
 
 // Supabase-backed mode: two devices, one board.
@@ -32,6 +38,8 @@ const readHousehold = () => {
 /** Rows in, the exact view model the components already consume out. */
 function project(rows, today) {
   const { household, members, checks, redemptions, claims } = rows
+  const catalog = rows.catalog ?? []
+  const dailyHabits = dailyHabitsFrom(catalog)
 
   const roster = [...members]
     .sort((a, b) => a.slot - b.slot)
@@ -55,7 +63,7 @@ function project(rows, today) {
   for (const [key, habitIds] of byMemberDay) {
     const [memberId, day] = key.split('|')
     const cleared = new Set(habitIds)
-    if (DAILY_HABITS.every((h) => cleared.has(h.id))) {
+    if (dailyHabits.every((h) => cleared.has(h.id))) {
       goalDates[memberId] = [...(goalDates[memberId] ?? []), day]
     }
   }
@@ -67,6 +75,10 @@ function project(rows, today) {
   return {
     code: household?.code ?? null,
     members: roster,
+    dailyHabits,
+    bonusHabits: bonusHabitsFrom(catalog),
+    dailyGoal: dailyHabits.reduce((sum, h) => sum + h.points, 0),
+    rewards: rewardsFrom(catalog),
     balance: (household?.seed_balance ?? 0) + xp + bonuses - spent,
     earned,
     grind: { date: today, done, goalDates },
@@ -80,6 +92,7 @@ function project(rows, today) {
       hue: r.hue,
       tier: r.tier,
       redeemedAt: new Date(r.created_at).getTime(),
+      usedAt: r.used_at ? new Date(r.used_at).getTime() : null,
       by: r.member_id,
     })),
     log: [...checks]
@@ -101,6 +114,7 @@ const emptyRows = {
   checks: [],
   redemptions: [],
   claims: [],
+  catalog: [],
 }
 
 export function useCloudGame() {
@@ -116,15 +130,20 @@ export function useCloudGame() {
     if (!id) return
     const since = shiftDay(todayKey(), -HISTORY_DAYS)
 
-    const [household, members, checks, redemptions, claims] = await Promise.all([
+    const [household, members, checks, redemptions, claims, catalog] =
+      await Promise.all([
       supabase.from('households').select('*').eq('id', id).maybeSingle(),
       supabase.from('members').select('*').eq('household_id', id),
       supabase.from('habit_checks').select('*').eq('household_id', id).gte('day', since),
       supabase.from('redemptions').select('*').eq('household_id', id).order('created_at', { ascending: false }),
       supabase.from('tier_claims').select('*').eq('household_id', id),
+      supabase.from('catalog_items').select('*').eq('household_id', id),
     ])
 
-    const failure = [household, members, checks, redemptions, claims].find((r) => r.error)
+    // A household that predates the catalog migration simply has none.
+    const failure = [household, members, checks, redemptions, claims].find(
+      (r) => r.error
+    )
     if (failure) {
       setError(failure.error.message)
       return
@@ -137,6 +156,7 @@ export function useCloudGame() {
       checks: checks.data ?? [],
       redemptions: redemptions.data ?? [],
       claims: claims.data ?? [],
+      catalog: catalog.error ? [] : (catalog.data ?? []),
     })
   }, [])
 
@@ -195,7 +215,13 @@ export function useCloudGame() {
     const filter = `household_id=eq.${householdId}`
     const channel = supabase.channel(`household:${householdId}`)
 
-    for (const table of ['habit_checks', 'redemptions', 'tier_claims', 'members']) {
+    for (const table of [
+      'habit_checks',
+      'redemptions',
+      'tier_claims',
+      'members',
+      'catalog_items',
+    ]) {
       channel.on('postgres_changes', { event: '*', schema: 'public', table, filter }, () =>
         scheduleRefetch(householdId)
       )
@@ -365,6 +391,59 @@ export function useCloudGame() {
     [householdId, activeId, fetchRows]
   )
 
+  const setCouponUsed = useCallback(
+    async (receiptId, used) => {
+      const { error: updateError } = await supabase
+        .from('redemptions')
+        .update({ used_at: used ? new Date().toISOString() : null })
+        .eq('id', receiptId)
+      if (updateError) setError(updateError.message)
+      fetchRows(householdId)
+    },
+    [householdId, fetchRows]
+  )
+
+  const addCatalogItem = useCallback(
+    async (kind, payload) => {
+      if (!householdId) return
+      const itemId = slugify(payload.title)
+      const { error: insertError } = await supabase.from('catalog_items').insert({
+        household_id: householdId,
+        kind,
+        item_id: itemId,
+        payload: { ...payload, hue: hueFor(itemId) },
+      })
+      if (insertError) setError(insertError.message)
+      fetchRows(householdId)
+    },
+    [householdId, fetchRows]
+  )
+
+  // Custom entries are dropped; built-ins are only switched off, since they
+  // live in code and would come back on the next load anyway.
+  const removeCatalogItem = useCallback(
+    async (kind, itemId, isCustom) => {
+      if (!householdId) return
+
+      if (isCustom) {
+        const { error: deleteError } = await supabase
+          .from('catalog_items')
+          .delete()
+          .match({ household_id: householdId, kind, item_id: itemId })
+        if (deleteError) setError(deleteError.message)
+      } else {
+        const { error: upsertError } = await supabase.from('catalog_items').upsert(
+          { household_id: householdId, kind, item_id: itemId, hidden: true, payload: null },
+          { onConflict: 'household_id,kind,item_id' }
+        )
+        if (upsertError) setError(upsertError.message)
+      }
+
+      fetchRows(householdId)
+    },
+    [householdId, fetchRows]
+  )
+
   const devGrant = useCallback(
     (points) =>
       insertChecks([
@@ -381,14 +460,14 @@ export function useCloudGame() {
   const devCompleteDaily = useCallback(
     () =>
       insertChecks(
-        DAILY_HABITS.map((h) => ({
+        view.dailyHabits.map((h) => ({
           habit_id: h.id,
           title: h.title,
           day: today,
           points: h.points,
         }))
       ),
-    [insertChecks, today]
+    [insertChecks, today, view]
   )
 
   const devClearToday = useCallback(async () => {
@@ -407,14 +486,50 @@ export function useCloudGame() {
       const rows = []
       for (let i = 1; i <= days; i += 1) {
         const day = shiftDay(today, -i)
-        for (const h of DAILY_HABITS) {
+        for (const h of view.dailyHabits) {
           rows.push({ habit_id: h.id, title: h.title, day, points: h.points })
         }
       }
       return insertChecks(rows)
     },
-    [insertChecks, today]
+    [insertChecks, today, view]
   )
+
+  /**
+   * Wipes the economy back to a fresh board for both players. Habit checks
+   * always go; receipts and tier claims need the optional delete policies from
+   * supabase/dev-reset.sql, since normal play only ever inserts them through
+   * the spending functions. Reports what it could not remove rather than
+   * failing silently.
+   */
+  const devClearPoints = useCallback(async () => {
+    if (!householdId) return { cleared: [], kept: [] }
+
+    const wipe = async (table) => {
+      const { error: wipeError } = await supabase
+        .from(table)
+        .delete()
+        .eq('household_id', householdId)
+      return wipeError ? null : table
+    }
+
+    const results = await Promise.all(
+      ['habit_checks', 'redemptions', 'tier_claims'].map(wipe)
+    )
+
+    const names = {
+      habit_checks: 'points',
+      redemptions: 'receipts',
+      tier_claims: 'tier claims',
+    }
+    const cleared = results.filter(Boolean).map((t) => names[t])
+    const kept = Object.keys(names)
+      .filter((t) => !results.includes(t))
+      .map((t) => names[t])
+
+    fetchRows(householdId)
+    return { cleared, kept }
+  }, [householdId, fetchRows])
 
   // Drops this device off the board without touching the shared data.
   const devForget = useCallback(async () => {
@@ -442,10 +557,14 @@ export function useCloudGame() {
     toggleHabit,
     redeem,
     claimTier,
+    setCouponUsed,
+    addCatalogItem,
+    removeCatalogItem,
     dev: {
       grant: devGrant,
       completeDaily: devCompleteDaily,
       clearToday: devClearToday,
+      clearPoints: devClearPoints,
       seedHistory: devSeedHistory,
       forget: devForget,
       refresh: () => fetchRows(householdId),

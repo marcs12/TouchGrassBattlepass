@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { usePopover } from '../lib/usePopover'
 import { useTheme } from '../theme/ThemeProvider'
 import Icon from './Icon'
 
@@ -7,6 +8,8 @@ export default function ThemePicker() {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
   const buttonRef = useRef(null)
+  const menuRef = useRef(null)
+  const menuStyle = usePopover(buttonRef, menuRef, open)
 
   useEffect(() => {
     if (!open) return
@@ -44,7 +47,7 @@ export default function ThemePicker() {
       </button>
 
       {open && (
-        <div className="themer__menu" role="menu" aria-label="App theme">
+        <div ref={menuRef} style={menuStyle} className="themer__menu" role="menu" aria-label="App theme">
           <p className="themer__heading label">App theme</p>
           {themes.map((t) => {
             const active = t.id === themeId
