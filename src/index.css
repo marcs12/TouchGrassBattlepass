@@ -31,6 +31,8 @@
   --art-ink: #7b4a58;
   --shadow-color: #7b4a58;
   --badge-ink: #5c3541;
+  --series-1: #c85f7c;
+  --series-2: #4a7fb5;
   --border-w: 2px;
   --shadow-off: 3px;
   --radius-lg: 18px;
@@ -2319,6 +2321,184 @@ h3 {
 
 .card__danger {
   color: var(--danger);
+}
+
+/* ---------- progress chart ---------- */
+
+.progress {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 22px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface-2);
+}
+
+.progress__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progress__total {
+  margin: 2px 0 0;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.progress__total strong {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.progress__readout {
+  margin: 0;
+  min-height: 14px;
+}
+
+/* Bars sit on a baseline; the surface shows between segments rather than a
+   border, so the fills stay flat like everything else. */
+.chart {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: end;
+  gap: 6px;
+  height: 132px;
+  padding-bottom: 18px;
+  border-bottom: var(--border-w) solid var(--ink);
+}
+
+.chart--month {
+  gap: 2px;
+}
+
+/* Flex, not grid: a percentage height resolves against a flex parent's
+   definite height, which is what makes the bars scale. */
+.chart__col {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* Ink outline, flat fills and a 2px gap between segments - the same drawing
+   rules as the rest of the app, so a chart doesn't look imported. */
+.chart__stack {
+  display: flex;
+  flex-direction: column-reverse;
+  flex: 0 0 var(--h);
+  gap: 2px;
+  width: 100%;
+  min-height: 6px;
+  overflow: hidden;
+  border: 1.5px solid var(--ink);
+  border-bottom: 0;
+  border-radius: 5px 5px 0 0;
+}
+
+.chart__stack i {
+  display: block;
+  min-height: 3px;
+}
+
+.chart__col--on .chart__stack {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.chart__tick {
+  position: absolute;
+  bottom: -17px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 10px;
+}
+
+.chart__range {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  color: var(--ink-3);
+}
+
+.chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0;
+}
+
+.chart__key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart__key i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  border: 1.5px solid var(--ink);
+}
+
+.chart__key--quiet {
+  color: var(--ink-3);
+}
+
+.progress__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  padding-top: 12px;
+  border-top: var(--border-w) dashed var(--line);
+}
+
+.progress__stats p {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+}
+
+.progress__stats strong {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress__table summary {
+  cursor: pointer;
+}
+
+.progress__table table {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress__table th,
+.progress__table td {
+  padding: 5px 8px;
+  text-align: right;
+  border-bottom: 1px solid var(--line);
+}
+
+.progress__table thead th,
+.progress__table tbody th {
+  text-align: left;
+  font-weight: 700;
 }
 
 /* ---------- breakpoints ---------- */

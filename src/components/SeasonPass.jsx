@@ -1,6 +1,7 @@
 import { SEASON, TIERS_TRACK, nextTier, tierAt } from '../data/season'
 import { useCountUp } from '../lib/useCountUp'
 import Icon from './Icon'
+import Progress from './Progress'
 import Window from './Window'
 
 function Tier({ tier, xp, claimed, onClaim }) {
@@ -48,7 +49,7 @@ function Tier({ tier, xp, claimed, onClaim }) {
   )
 }
 
-export default function SeasonPass({ season, onClaimTier }) {
+export default function SeasonPass({ season, history, members, grind, onClaimTier }) {
   const xp = season.xp
   const shownXp = useCountUp(xp)
   const claimed = new Set(season.claimed)
@@ -104,6 +105,8 @@ export default function SeasonPass({ season, onClaimTier }) {
           </p>
         </div>
       </header>
+
+      <Progress history={history} members={members} goalDates={grind?.goalDates} />
 
       {readyCount > 0 && (
         <p className="banner">

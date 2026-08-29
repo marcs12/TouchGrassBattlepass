@@ -6,7 +6,7 @@ import {
   rewardsFrom,
   slugify,
 } from '../data/catalog'
-import { shiftDay, today } from '../lib/day'
+import { recentDays, shiftDay, today } from '../lib/day'
 import { loadState, saveState } from '../lib/storage'
 
 // Device-only mode. Used when no Supabase credentials are configured, and as
@@ -27,6 +27,10 @@ const freshState = () => ({
   log: [],
   // Habits and rewards added in the app, plus hidden built-ins.
   catalog: [],
+  // Points banked per member per day, keyed YYYY-MM-DD. The synced backend
+  // derives this from its check rows; on-device there are no rows, so it is
+  // accumulated as points move.
+  history: {},
 })
 
 const normalize = (state) => {
@@ -37,9 +41,16 @@ const normalize = (state) => {
     earned: { ...base.earned, ...state.earned },
     log: state.log ?? base.log,
     catalog: state.catalog ?? [],
+    history: state.history ?? {},
     grind: { ...base.grind, ...state.grind },
     season: { ...base.season, ...state.season },
   }
+}
+
+const addToHistory = (history, day, member, delta) => {
+  const forDay = { ...(history[day] ?? {}) }
+  forDay[member] = Math.max(0, (forDay[member] ?? 0) + delta)
+  return { ...history, [day]: forDay }
 }
 
 const rollOver = (state, day = today()) =>
@@ -134,6 +145,7 @@ export function useLocalGame() {
 
       return {
         ...prev,
+        history: addToHistory(prev.history, prev.grind.date, who, delta),
         log: [entry, ...prev.log].slice(0, LOG_LIMIT),
         balance: prev.balance + delta,
         earned: {
@@ -237,6 +249,7 @@ export function useLocalGame() {
         ...prev,
         balance: prev.balance + points,
         earned: { ...prev.earned, [who]: Math.max(0, (prev.earned[who] ?? 0) + points) },
+        history: addToHistory(prev.history, prev.grind.date, who, points),
         season: { ...prev.season, xp: Math.max(0, prev.season.xp + points) },
         log: [
           {
@@ -266,6 +279,7 @@ export function useLocalGame() {
 
       return {
         ...prev,
+        history: addToHistory(prev.history, prev.grind.date, who, points),
         balance: prev.balance + points,
         earned: { ...prev.earned, [who]: (prev.earned[who] ?? 0) + points },
         season: { ...prev.season, xp: prev.season.xp + points },
@@ -295,6 +309,7 @@ export function useLocalGame() {
 
       return {
         ...prev,
+        history: addToHistory(prev.history, prev.grind.date, who, -points),
         balance: Math.max(0, prev.balance - points),
         earned: { ...prev.earned, [who]: Math.max(0, (prev.earned[who] ?? 0) - points) },
         season: { ...prev.season, xp: Math.max(0, prev.season.xp - points) },
@@ -346,6 +361,11 @@ export function useLocalGame() {
     location.reload()
   }, [])
 
+  const history = recentDays(30, state.grind.date).map((day) => ({
+    day,
+    totals: state.history[day] ?? {},
+  }))
+
   const dailyHabits = dailyHabitsFrom(state.catalog)
   const bonusHabits = bonusHabitsFrom(state.catalog)
   const rewards = rewardsFrom(state.catalog)
@@ -360,6 +380,9 @@ export function useLocalGame() {
     error: null,
     code: null,
     ...state,
+    // Derived, and after the spread: state carries the raw day map under the
+    // same name and would otherwise win.
+    history,
     start,
     join: null,
     pickMember: null,
