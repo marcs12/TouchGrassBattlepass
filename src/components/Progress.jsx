@@ -22,12 +22,12 @@ const initial = (day) =>
  * categorical pair those failed separation checks (too light, too close).
  * Identity is never colour alone - there's a legend, hover detail and a table.
  */
-export default function Progress({ history, members, goalDates }) {
+export default function Progress({ history = [], members = [], goalDates }) {
   const [rangeId, setRangeId] = useState('week')
   const [hover, setHover] = useState(null)
   const range = RANGES.find((r) => r.id === rangeId)
 
-  const days = useMemo(() => history.slice(-range.days), [history, range.days])
+  const days = useMemo(() => (history ?? []).slice(-range.days), [history, range.days])
 
   const totals = days.map((d) =>
     members.reduce((sum, m) => sum + (d.totals[m.id] ?? 0), 0)

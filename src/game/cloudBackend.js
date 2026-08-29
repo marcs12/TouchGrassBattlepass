@@ -96,6 +96,7 @@ function project(rows, today) {
   return {
     code: household?.code ?? null,
     members: roster,
+    history,
     dailyHabits,
     bonusHabits: bonusHabitsFrom(catalog),
     dailyGoal: dailyHabits.reduce((sum, h) => sum + h.points, 0),
