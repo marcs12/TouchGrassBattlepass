@@ -213,7 +213,12 @@ account, nothing to re-sign every week.
 
 It then launches fullscreen with its own icon, and the status bar picks up the
 current theme's colour. A service worker caches the shell so it opens without
-a connection.
+a connection, and prunes itself: build output is content-hashed, so on every
+launch the freshly fetched page doubles as the keep-list and anything left
+over from an older deploy is deleted.
+
+Updates need no reinstall - the page is fetched network-first, so the next
+launch with a connection is already on the newest build.
 
 ### Offline
 
