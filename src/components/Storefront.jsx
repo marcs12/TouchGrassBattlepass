@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
-import { REWARDS, TIERS } from '../data/rewards'
+import { TIERS } from '../data/rewards'
 import RewardCard from './RewardCard'
+import Cart from './Cart'
+import ItemForm from './ItemForm'
+import Icon from './Icon'
 import Window from './Window'
 
 const FILTERS = [
@@ -16,35 +19,56 @@ const SORTS = {
   priciest: (a, b) => b.cost - a.cost,
 }
 
-export default function Storefront({ balance, redeemed, onRedeem }) {
+export default function Storefront({
+  balance,
+  redeemed,
+  rewards,
+  cart,
+  onCart,
+  onCheckout,
+  checkingOut,
+  onAddReward,
+  onRemoveReward,
+}) {
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState('cheapest')
+  const [editing, setEditing] = useState(false)
 
   const affordableCount = useMemo(
-    () => REWARDS.filter((r) => r.cost <= balance).length,
-    [balance]
+    () => rewards.filter((r) => r.cost <= balance).length,
+    [rewards, balance]
   )
 
   // Cheapest thing still out of reach - the thing worth grinding for.
   const nextUp = useMemo(() => {
-    const locked = REWARDS.filter((r) => r.cost > balance).sort(SORTS.cheapest)
+    const locked = rewards.filter((r) => r.cost > balance).sort(SORTS.cheapest)
     return locked[0] ?? null
-  }, [balance])
+  }, [rewards, balance])
 
   const visible = useMemo(() => {
     const matches =
       filter === 'all'
-        ? REWARDS
+        ? rewards
         : filter === 'affordable'
-          ? REWARDS.filter((r) => r.cost <= balance)
-          : REWARDS.filter((r) => r.tier === filter)
+          ? rewards.filter((r) => r.cost <= balance)
+          : rewards.filter((r) => r.tier === filter)
     return [...matches].sort(SORTS[sort])
-  }, [filter, sort, balance])
+  }, [rewards, filter, sort, balance])
 
   const ownedCount = (id) => redeemed.filter((r) => r.id === id).length
+  const inCart = (id) => cart.find((line) => line.id === id)?.qty ?? 0
   const nextProgress = nextUp
     ? Math.min(100, Math.round((balance / nextUp.cost) * 100))
     : 100
+
+  const addToCart = (reward) => {
+    const existing = cart.find((line) => line.id === reward.id)
+    onCart(
+      existing
+        ? cart.map((l) => (l.id === reward.id ? { ...l, qty: l.qty + 1 } : l))
+        : [...cart, { id: reward.id, qty: 1 }]
+    )
+  }
 
   return (
     <Window title="reward-store">
@@ -52,7 +76,8 @@ export default function Storefront({ balance, redeemed, onRedeem }) {
         <div>
           <h2 className="store__title">Reward Store</h2>
           <p className="store__sub">
-            Spend the shared bank. Everything here is agreed on in advance.
+            Fill the cart, then check out. Everything here is agreed on in
+            advance — no renegotiating at the till.
           </p>
         </div>
 
@@ -111,8 +136,30 @@ export default function Storefront({ balance, redeemed, onRedeem }) {
             <option value="cheapest">Cheapest first</option>
             <option value="priciest">Priciest first</option>
           </select>
+          <button
+            type="button"
+            className={`chip ${editing ? 'chip--on' : ''}`}
+            aria-pressed={editing}
+            onClick={() => setEditing((e) => !e)}
+          >
+            <Icon name={editing ? 'check' : 'plus'} size={14} strokeWidth="2.2" />
+            {editing ? 'Done' : 'Add'}
+          </button>
         </div>
       </div>
+
+      {editing && (
+        <ItemForm kind="reward" onAdd={onAddReward} onCancel={() => setEditing(false)} />
+      )}
+
+      <Cart
+        lines={cart}
+        rewards={rewards}
+        balance={balance}
+        onChange={onCart}
+        onCheckout={onCheckout}
+        busy={checkingOut}
+      />
 
       {visible.length === 0 ? (
         <p className="empty">Nothing in reach yet. Go fold some laundry.</p>
@@ -124,7 +171,10 @@ export default function Storefront({ balance, redeemed, onRedeem }) {
               reward={reward}
               balance={balance}
               owned={ownedCount(reward.id)}
-              onRedeem={onRedeem}
+              inCart={inCart(reward.id)}
+              editing={editing}
+              onAdd={addToCart}
+              onRemove={onRemoveReward}
             />
           ))}
         </div>

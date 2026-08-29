@@ -12,8 +12,12 @@ both agreed on ahead of time.
    balance. Personal totals are a record of who contributed, not a wallet.
 3. **Season Pass** - Points earned are season XP. Twelve tiers hand out bonus
    points or agreed-on real-world perks. Spending never costs track progress.
-4. **Store** - Spend the shared bank on the reward catalog.
-5. **Receipts** - What was redeemed, when, and by whom.
+4. **Store** - Shop the reward catalog: fill a cart, then check out.
+5. **Coupons** - Every redeemed reward is a coupon until someone cashes it in.
+   Used ones grey out instead of disappearing.
+
+Habits and rewards can be added and removed in the app - the lists that ship
+in code are just the starting point.
 
 ## Two modes
 
@@ -46,7 +50,9 @@ This is the whole setup:
    fine). Pick a region near you.
 2. **Run the schema.** Open the project's SQL Editor, paste all of
    `supabase/schema.sql`, and run it. It creates the tables, the row-level
-   security policies, and the functions the app calls.
+   security policies, and the functions the app calls. Then run
+   `supabase/002-catalog-and-coupons.sql`, which adds custom catalog entries
+   and the used-coupon flag.
 3. **Turn on anonymous sign-ins.** Authentication -> Sign In / Providers ->
    enable *Anonymous sign-ins*. Devices never make an account; they get an
    anonymous identity that is tied to your household.
@@ -136,10 +142,19 @@ token, so adding a theme is one entry in that file and no CSS changes.
 
 ## Editing the catalogs
 
+Most of the time you don't need to touch the code. **Add** in the Daily Grind
+or the Store opens a small form - name, a line of detail, what it's worth, and
+an icon - and the entry is saved to the household, so both phones see it. The
+same toggle puts a remove button on every card: custom entries are deleted,
+built-ins are switched off (they live in code, so they can only be hidden).
+
+To change the defaults themselves:
+
 - `src/data/rewards.js` - the store. Each entry needs `id`, `title`,
   `description`, `cost`, `tier`, `icon` and `hue`.
 - `src/data/habits.js` - daily and bonus habits and their point values.
 - `src/data/season.js` - the twelve season tiers.
+- `src/data/catalog.js` - merges the shipped lists with a household's own.
 
 Icons come from the stroke set in `src/components/Icon.jsx`; add a path there
 to use a new one.
@@ -180,6 +195,6 @@ dates are never rewritten.
 
 ## Still to do
 
+- Editing an existing habit or reward, rather than removing and re-adding it
 - Offline queueing, so a check-off made with no signal syncs when it returns
-- Editing habits and rewards in the app instead of in code
 - Season end and rollover into Season 2

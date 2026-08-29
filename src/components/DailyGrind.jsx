@@ -1,6 +1,7 @@
-import { BONUS_HABITS, DAILY_HABITS, DAILY_GOAL } from '../data/habits'
+import { useState } from 'react'
 import { recentDays, streakFrom } from '../lib/day'
 import Icon from './Icon'
+import ItemForm from './ItemForm'
 import ContributionLog from './ContributionLog'
 import Scoreboard from './Scoreboard'
 import Window from './Window'
@@ -8,7 +9,7 @@ import Window from './Window'
 const STRIP_DAYS = 7
 const WEEKDAY = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
-function HabitRow({ habit, done, blocked, onToggle }) {
+function HabitRow({ habit, done, blocked, editing, onToggle, onRemove }) {
   return (
     <li>
       <button
@@ -45,20 +46,29 @@ function HabitRow({ habit, done, blocked, onToggle }) {
           <span className="habit__unit">pts</span>
         </span>
       </button>
+
+      {editing && (
+        <button
+          type="button"
+          className="habit__remove"
+          aria-label={`Remove ${habit.title}`}
+          onClick={() => onRemove(habit.id, Boolean(habit.custom))}
+        >
+          <Icon name="trash" size={15} strokeWidth="1.9" />
+        </button>
+      )}
     </li>
   )
 }
 
-const ALL_HABITS = [...DAILY_HABITS, ...BONUS_HABITS]
-
 // What each member has banked today, from their own checklist.
-const bankedToday = (members, done) =>
+const bankedToday = (members, done, allHabits) =>
   Object.fromEntries(
     members.map((m) => {
       const checked = new Set(done[m.id] ?? [])
       return [
         m.id,
-        ALL_HABITS.filter((h) => checked.has(h.id)).reduce(
+        allHabits.filter((h) => checked.has(h.id)).reduce(
           (sum, h) => sum + h.points,
           0
         ),
@@ -73,23 +83,31 @@ export default function DailyGrind({
   earned,
   balance,
   log,
+  dailyHabits,
+  bonusHabits,
+  dailyGoal,
   onToggleHabit,
+  onAddHabit,
+  onRemoveHabit,
 }) {
+  const [editing, setEditing] = useState(false)
   const active = members.find((m) => m.id === activeId) ?? members[0]
   const partner = members.find((m) => m.id !== active.id)
 
   const done = new Set(grind.done[active.id] ?? [])
   const partnerDone = new Set((partner && grind.done[partner.id]) ?? [])
 
-  const today = bankedToday(members, grind.done)
+  const today = bankedToday(members, grind.done, [...dailyHabits, ...bonusHabits])
   const banked = today[active.id] ?? 0
 
-  const dailyDone = DAILY_HABITS.filter((h) => done.has(h.id)).length
-  const dailyEarned = DAILY_HABITS.filter((h) => done.has(h.id)).reduce(
+  const dailyDone = dailyHabits.filter((h) => done.has(h.id)).length
+  const dailyEarned = dailyHabits.filter((h) => done.has(h.id)).reduce(
     (sum, h) => sum + h.points,
     0
   )
-  const goalProgress = Math.min(100, Math.round((dailyEarned / DAILY_GOAL) * 100))
+  const goalProgress = dailyGoal
+    ? Math.min(100, Math.round((dailyEarned / dailyGoal) * 100))
+    : 0
 
   const goalDates = grind.goalDates[active.id] ?? []
   const streak = streakFrom(goalDates, grind.date)
@@ -102,7 +120,9 @@ export default function DailyGrind({
     habit,
     done: done.has(habit.id),
     blocked: !canUndo(habit),
+    editing,
     onToggle: onToggleHabit,
+    onRemove: onRemoveHabit,
   })
 
   return (
@@ -131,7 +151,7 @@ export default function DailyGrind({
           </div>
           <p className="nextup__hint">
             <strong>
-              {dailyDone}/{DAILY_HABITS.length}
+              {dailyDone}/{dailyHabits.length}
             </strong>{' '}
             daily done
             {partner && (
@@ -139,8 +159,8 @@ export default function DailyGrind({
                 {' · '}
                 {partner.name}{' '}
                 <strong>
-                  {DAILY_HABITS.filter((h) => partnerDone.has(h.id)).length}/
-                  {DAILY_HABITS.length}
+                  {dailyHabits.filter((h) => partnerDone.has(h.id)).length}/
+                  {dailyHabits.length}
                 </strong>
               </>
             )}
@@ -185,10 +205,27 @@ export default function DailyGrind({
         </ol>
       </div>
 
+      <div className="controls controls--tight">
+        <p className="label">Your lists</p>
+        <button
+          type="button"
+          className={`chip ${editing ? 'chip--on' : ''}`}
+          aria-pressed={editing}
+          onClick={() => setEditing((e) => !e)}
+        >
+          <Icon name={editing ? 'check' : 'plus'} size={14} strokeWidth="2.2" />
+          {editing ? 'Done' : 'Add habit'}
+        </button>
+      </div>
+
+      {editing && (
+        <ItemForm kind="habit" onAdd={onAddHabit} onCancel={() => setEditing(false)} />
+      )}
+
       <section className="habits">
         <h3 className="habits__title label">Daily · resets at midnight</h3>
         <ul className="habits__list">
-          {DAILY_HABITS.map((habit) => (
+          {dailyHabits.map((habit) => (
             <HabitRow key={habit.id} {...rowProps(habit)} />
           ))}
         </ul>
@@ -197,7 +234,7 @@ export default function DailyGrind({
       <section className="habits">
         <h3 className="habits__title label">Bonus · bigger jobs, bigger payout</h3>
         <ul className="habits__list">
-          {BONUS_HABITS.map((habit) => (
+          {bonusHabits.map((habit) => (
             <HabitRow key={habit.id} {...rowProps(habit)} />
           ))}
         </ul>
