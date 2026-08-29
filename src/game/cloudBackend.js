@@ -432,6 +432,12 @@ export function useCloudGame() {
     flushRef.current = flush
   }, [flush])
 
+  // A queue can outlive the page: writes made offline are still waiting on the
+  // next launch, so drain as soon as we know which household we are.
+  useEffect(() => {
+    if (householdId && queue.length > 0) flush()
+  }, [householdId, queue.length, flush])
+
   const enqueue = useCallback(
     (op) => {
       const next = [...loadQueue(), { id: `op-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, at: Date.now(), ...op }]
