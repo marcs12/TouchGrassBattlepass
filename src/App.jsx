@@ -10,9 +10,12 @@ import Window from './components/Window'
 import Icon from './components/Icon'
 import { ThemeProvider } from './theme/ThemeProvider'
 import { useGame } from './game/useGame'
+import { useDevMode } from './game/useDevMode'
+import DevPanel from './components/DevPanel'
 
 export default function App() {
   const game = useGame()
+  const dev = useDevMode()
   const [tab, setTab] = useState('grind')
 
   const shell = (children) => (
@@ -61,6 +64,7 @@ export default function App() {
           earned={game.earned}
           code={game.code}
           onSwitch={game.switchMember}
+          onLogoTap={dev.registerTap}
         />
 
         <main className="app__main">
@@ -98,6 +102,8 @@ export default function App() {
             )}
           </div>
         </main>
+
+        {dev.on && <DevPanel game={game} onClose={dev.disable} />}
       </div>
     </ThemeProvider>
   )
