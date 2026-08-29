@@ -1,0 +1,20 @@
+{
+  "name": "Touch Grass Battlepass",
+  "short_name": "Battlepass",
+  "description": "A co-op habit tracker and reward store for two people.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#fdf1f3",
+  "theme_color": "#c9ece0",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

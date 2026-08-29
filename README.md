@@ -202,6 +202,20 @@ the panel says what it could not remove rather than failing quietly. The day off
 in `localStorage` under `tgbp.dev.offset` and only affects `today()` - stored
 dates are never rewritten.
 
+## Installing it on a phone
+
+It is a PWA, so it installs from the browser - no store, no Apple developer
+account, nothing to re-sign every week.
+
+- **iPhone** - open the site in Safari, Share, *Add to Home Screen*
+- **Android** - open in Chrome, menu, *Install app* (or *Add to home screen*)
+
+It then launches fullscreen with its own icon, and the status bar picks up the
+current theme's colour. A service worker caches the shell so it opens without
+a connection; the board itself is live data and is never served stale, so
+opening it offline shows the setup screen until the network is back. Offline
+queueing is still on the list.
+
 ## Living with it
 
 A few things exist because two people share this on two phones:

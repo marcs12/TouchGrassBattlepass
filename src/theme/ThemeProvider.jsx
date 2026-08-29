@@ -25,6 +25,11 @@ export function ThemeProvider({ children }) {
     }
     root.style.colorScheme = theme.scheme
     root.dataset.theme = theme.id
+
+    // Installed on a phone, this paints the status bar around the app.
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute('content', theme.tokens.bar)
   }, [theme])
 
   useEffect(() => {
