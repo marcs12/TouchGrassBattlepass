@@ -1,4 +1,4 @@
-import { SEASON, TIERS_TRACK, nextTier, tierAt } from '../data/season'
+import { SEASON_XP_TOTAL, TIERS_TRACK, nextTier, seasonName, tierAt } from '../data/season'
 import { useCountUp } from '../lib/useCountUp'
 import Icon from './Icon'
 import Pane from './Pane'
@@ -51,16 +51,26 @@ function Tier({ tier, xp, claimed, onClaim }) {
   )
 }
 
+const finishedOn = (iso) =>
+  new Date(iso).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+
 export default function SeasonPass({
   season,
+  pastSeasons,
   history,
   members,
   grind,
   weeks,
   onOpenRecap,
+  onEndSeason,
   onClaimTier,
 }) {
   const xp = season.xp
+  const number = season.n ?? 1
   const shownXp = useCountUp(xp)
   const claimed = new Set(season.claimed)
   const current = tierAt(xp)
@@ -77,11 +87,18 @@ export default function SeasonPass({
     (t) => xp >= t.xp && !claimed.has(t.n)
   ).length
 
+  // The track is finished, so the next season is available - but not until the
+  // tiers already earned have been taken. Rolling over resets the claims, and
+  // walking away from a bonus you earned is not a thing to let someone do by
+  // accident.
+  const finished = xp >= SEASON_XP_TOTAL
+  const owed = readyCount > 0
+
   return (
     <Window title="season-pass">
       <header className="store__head">
         <div>
-          <h2 className="store__title">{SEASON.name} Pass</h2>
+          <h2 className="store__title">{seasonName(number)} Pass</h2>
           <p className="store__sub">
             Every point earned in the Daily Grind is season XP. Spending in the
             store never costs you track progress — the pass only moves forward.
@@ -116,6 +133,35 @@ export default function SeasonPass({
         </div>
       </header>
 
+      {finished && (
+        <Pane title="season-complete" tone="b">
+          <div className="rollover">
+            <span className="rollover__art" aria-hidden="true">
+              <Icon name="trophy" size={26} strokeWidth="1.9" />
+            </span>
+            <p className="label">Track finished</p>
+            <h3 className="rollover__title">
+              {seasonName(number)}, all twelve tiers
+            </h3>
+            <p className="rollover__note">
+              {xp.toLocaleString()} XP earned. Rolling over resets the track and
+              nothing else — the bank, the coupons, your streaks and every
+              Sunday stay exactly where they are.
+            </p>
+            <button
+              type="button"
+              className="btn"
+              disabled={owed}
+              onClick={onEndSeason}
+            >
+              {owed
+                ? `Claim your last ${readyCount} tier${readyCount > 1 ? 's' : ''} first`
+                : `Start ${seasonName(number + 1)}`}
+            </button>
+          </div>
+        </Pane>
+      )}
+
       <Pane title="progress.chart" tone="c">
         <Progress history={history} members={members} goalDates={grind?.goalDates} />
       </Pane>
@@ -126,6 +172,34 @@ export default function SeasonPass({
         </Pane>
       )}
 
+      {pastSeasons.length > 0 && (
+        <Pane title="seasons — newest first" tone="a" flush>
+          <section className="shelf" aria-label="Past seasons">
+            <h3 className="habits__title label">Seasons · newest first</h3>
+            <ul className="shelf__list">
+              {pastSeasons.map((past) => (
+                <li key={past.n}>
+                  <div className="shelf__card shelf__card--still">
+                    <span className="shelf__art" aria-hidden="true">
+                      <Icon name="trophy" size={20} strokeWidth="1.9" />
+                    </span>
+                    <span className="shelf__meta">
+                      <strong>{seasonName(past.n)}</strong>
+                      <span className="label">
+                        {past.endedAt ? `Finished ${finishedOn(past.endedAt)}` : 'Finished'}
+                      </span>
+                    </span>
+                    <span className="shelf__scores label">
+                      {past.xp.toLocaleString()} XP
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </Pane>
+      )}
+
       {readyCount > 0 && (
         <p className="banner">
           <Icon name="gift" size={18} strokeWidth="1.9" />
@@ -133,7 +207,7 @@ export default function SeasonPass({
         </p>
       )}
 
-      <Pane title="season-1.pass" tone="d" flush>
+      <Pane title={`season-${number}.pass`} tone="d" flush>
       <ol className="track">
         {TIERS_TRACK.map((tier) => (
           <Tier

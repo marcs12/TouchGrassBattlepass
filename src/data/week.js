@@ -4,6 +4,10 @@ import { shiftDay, today as todayKey } from '../lib/day'
 // backends already build, so nothing here talks to a backend and developer
 // mode's time travel works for free through `today()`.
 //
+// The week is a straight race: whoever banks more points over the seven days
+// takes it. Missing a habit costs you those points and nothing else - there is
+// no perfect-week requirement, because there is no such week.
+//
 // A week runs Sunday to Saturday in the pair's own timezone, for the same
 // reason a day rolls over at their midnight rather than UTC's. That is the
 // calendar week people already read on a wall, so the streak strip and the
@@ -12,9 +16,8 @@ import { shiftDay, today as todayKey } from '../lib/day'
 // The week therefore closes on Saturday midnight, and the recap lands the
 // following evening: Sunday Night is the look back, not the deadline.
 
-export const TARGET_WEEKS = 4 // how far back the median looks
-export const MIN_TARGET_DAYS = 3 // a fresh pair reaches 100% in three full days
-export const DEAD_HEAT = 0.05 // a margin under this is nobody's win
+export const WEEK_TARGET_DAYS = 5 // a good week, not a perfect one
+export const DEAD_HEAT = 0.05 // a lead under this share of the leader is nobody's win
 export const RECAP_HOUR = 20 // the evening after the week closes, local
 export const REVEAL_AFTER_MS = 24 * 60 * 60 * 1000 // stake flips anyway after a day
 
@@ -41,60 +44,98 @@ const pointsBetween = (history, memberId, from, to) =>
     0
   )
 
-/** Matches Postgres `percentile_cont(0.5)`: the mean of the middle pair. */
-const median = (values) => {
-  if (values.length === 0) return 0
-  const sorted = [...values].sort((a, b) => a - b)
-  const mid = sorted.length / 2
-  return sorted.length % 2
-    ? sorted[Math.floor(mid)]
-    : (sorted[mid - 1] + sorted[mid]) / 2
-}
+/**
+ * A player's agreed multiplier, defaulting to level.
+ *
+ * Points-only quietly favours whoever has the lighter week at work, and the
+ * two of you already know which of you that is. Rather than have the database
+ * guess at it - which is what the old median target was doing - this is a
+ * number you both agree on out loud and can change whenever it stops being
+ * true.
+ */
+export const HANDICAP_MIN = 0.5
+export const HANDICAP_MAX = 2
+export const HANDICAP_STEP = 0.05
 
-export const minTargetFor = (dailyGoal) => Math.max(1, dailyGoal * MIN_TARGET_DAYS)
+export const handicapOf = (member) => {
+  const raw = Number(member?.handicap)
+  if (!Number.isFinite(raw) || raw <= 0) return 1
+  return Math.min(HANDICAP_MAX, Math.max(HANDICAP_MIN, raw))
+}
 
 /**
- * What a normal week looks like for this player: the median of their own last
- * four. Scoring against yourself rather than against each other is the whole
- * point - raw points would just hand every week to whoever had the lighter
- * one at work.
+ * What a good week is worth: five full daily lists plus the weekly list.
+ *
+ * Five rather than seven on purpose - a target you only reach by never missing
+ * a day is a target that is missed, and the point of the week is the race, not
+ * a perfect record. The weekly habits count once because that is how often
+ * they come round.
+ *
+ * It is the same number for both players, which is what makes the week a
+ * straight race: whoever banks more points wins it.
  */
-const targetFor = (history, memberId, start, minTarget) => {
-  const prior = Array.from({ length: TARGET_WEEKS }, (_, i) => {
-    const from = shiftDay(start, -7 * (i + 1))
-    return pointsBetween(history, memberId, from, shiftDay(from, 6))
-  })
-  return Math.max(minTarget, Math.round(median(prior)))
-}
+export const weekTargetFor = (dailyGoal = 0, weeklyGoal = 0) =>
+  Math.max(1, dailyGoal * WEEK_TARGET_DAYS + weeklyGoal)
 
 /**
  * Live standing for a week. The same shape `settle_week` freezes into
  * `weeks.score`, so the banner and the recap read one thing.
+ *
+ * The week is won on points banked, full stop. `target` is there for the
+ * progress bars - how the week is going - and never decides the winner.
  */
-export function scoreWeek({ history = [], members = [], dailyGoal = 0, start, today = todayKey() }) {
+export function scoreWeek({
+  history = [],
+  members = [],
+  dailyGoal = 0,
+  weeklyGoal = 0,
+  start,
+  today = todayKey(),
+}) {
   const from = start ?? weekStart(today)
   const to = weekEnd(from)
-  const minTarget = minTargetFor(dailyGoal)
+  const target = weekTargetFor(dailyGoal, weeklyGoal)
 
   const scored = {}
   for (const member of members) {
     const points = pointsBetween(history, member.id, from, to)
-    const target = targetFor(history, member.id, from, minTarget)
-    scored[member.id] = { points, target, score: points / target }
+    const weight = handicapOf(member)
+    scored[member.id] = {
+      points,
+      weight,
+      // What the race actually compares. With no handicap set it is the same
+      // number as `points`, which is the case this is tuned for.
+      adjusted: Math.round(points * weight),
+      target,
+      score: Math.round(points * weight) / target,
+    }
   }
 
-  const [a, b] = members.map((m) => scored[m.id] ?? { points: 0, target: minTarget, score: 0 })
-  const gap = (a?.score ?? 0) - (b?.score ?? 0)
-  const winner =
-    gap >= DEAD_HEAT ? members[0]?.id : -gap >= DEAD_HEAT ? members[1]?.id : null
+  const [a, b] = members.map(
+    (m) => scored[m.id] ?? { points: 0, weight: 1, adjusted: 0, target, score: 0 }
+  )
+  const aPoints = a?.adjusted ?? 0
+  const bPoints = b?.adjusted ?? 0
+  const lead = Math.abs(aPoints - bPoints)
+  const front = Math.max(aPoints, bPoints)
 
-  const teamPoints = (a?.points ?? 0) + (b?.points ?? 0)
-  const teamTarget = (a?.target ?? 0) + (b?.target ?? 0)
+  // A lead under 5% of the leader's own total is a dead heat: nobody takes a
+  // week off the other one over a single check-off's worth of points. A week
+  // where neither of you banked anything is a dead heat too.
+  const decided = front > 0 && lead >= front * DEAD_HEAT
+  const winner = !decided ? null : aPoints > bPoints ? members[0]?.id : members[1]?.id
+
+  // Adjusted on both sides, so a handicap moves the shared prize the same way
+  // it moves the race.
+  const teamPoints = aPoints + bPoints
+  const teamTarget = target * Math.max(1, members.length)
 
   return {
     start: from,
     end: to,
-    minTarget,
+    target,
+    lead,
+    handicapped: members.some((m) => handicapOf(m) !== 1),
     // Inclusive: on Sunday there is still one day left to play.
     daysLeft: Math.max(0, Math.round((new Date(to) - new Date(today)) / 86400000) + 1),
     members: scored,

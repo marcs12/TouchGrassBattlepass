@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { streakFrom } from '../lib/day'
+import { streakFrom } from '../data/streak'
 
 const RANGES = [
   { id: 'week', label: 'Week', days: 7 },
@@ -147,7 +147,7 @@ export default function Progress({ history = [], members = [], goalDates, fixed 
         </p>
         <p>
           <strong>{cleared}</strong>
-          <span className="label">full lists cleared</span>
+          <span className="label">days that counted</span>
         </p>
         <p>
           <strong>{Math.round(sum / range.days).toLocaleString()}</strong>

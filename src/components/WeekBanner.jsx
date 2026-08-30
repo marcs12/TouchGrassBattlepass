@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { HANDICAP_MAX, HANDICAP_MIN, HANDICAP_STEP, handicapOf } from '../data/week'
 import Icon from './Icon'
 import ItemForm from './ItemForm'
 
-// Score is a share of your own normal week, so it can and should go past 100%.
+// Share of a good week. It can and should go past 100% - the bar is capped,
+// the number is not.
 const pct = (score) => Math.round((score ?? 0) * 100)
 
 const range = (start, end) => {
@@ -17,11 +19,21 @@ const range = (start, end) => {
 /**
  * The live week, on top of the daily list.
  *
- * Each player is measured against the median of their own last four weeks
- * rather than against each other: a brutal week at work shouldn't hand the
- * other one an automatic win, and a personal best should beat a coast.
+ * It is a straight race: whoever banks more points over the seven days takes
+ * the week. The bar is progress toward a good week - five full daily lists
+ * plus the weeklies - and decides nothing; the points do.
  */
-export default function WeekBanner({ week, members, activeId, stakes, onOpenWeek, onAddStake }) {
+const round2 = (n) => Math.round(n * 100) / 100
+
+export default function WeekBanner({
+  week,
+  members,
+  activeId,
+  stakes,
+  onOpenWeek,
+  onAddStake,
+  onHandicap,
+}) {
   const [picking, setPicking] = useState(null)
   const [adding, setAdding] = useState(false)
   const row = week.row
@@ -31,6 +43,35 @@ export default function WeekBanner({ week, members, activeId, stakes, onOpenWeek
   const teamPct = week.team.target
     ? Math.min(100, Math.round((week.team.points / week.team.target) * 100))
     : 0
+
+  // `winner` on a live week is whoever is ahead right now, by the same rule
+  // that settles it on Sunday.
+  const leader = members.find((m) => m.id === week.winner) ?? null
+  const played = week.team.points > 0
+  const behind = leader && leader.id !== activeId
+
+  // The week is worth saying something about when it is nearly over and still
+  // in play. Friday and Saturday, in other words - the days it actually gets
+  // won on.
+  const closing = week.daysLeft > 0 && week.daysLeft <= 2 && played
+  const nudge = !closing
+    ? null
+    : !leader
+      ? `Dead level with ${week.daysLeft} day${week.daysLeft === 1 ? '' : 's'} left.`
+      : behind
+        ? `You're ${week.lead.toLocaleString()} behind with ${week.daysLeft} day${
+            week.daysLeft === 1 ? '' : 's'
+          } left.`
+        : week.lead < week.target * 0.1
+          ? `Only ${week.lead.toLocaleString()} ahead. Don't coast.`
+          : null
+
+  const bump = (member, by) => {
+    const next = round2(
+      Math.min(HANDICAP_MAX, Math.max(HANDICAP_MIN, handicapOf(member) + by))
+    )
+    if (next !== handicapOf(member)) onHandicap?.(member.id, next)
+  }
 
   const choose = (stake) => {
     onOpenWeek(picking, stake.title)
@@ -52,11 +93,25 @@ export default function WeekBanner({ week, members, activeId, stakes, onOpenWeek
               'Scoring tonight'
             )}
           </p>
+          <p className="week__lead label">
+            {!played
+              ? 'Nobody has banked anything yet'
+              : leader
+                ? `${leader.name} leads by ${week.lead.toLocaleString()} pts`
+                : 'Level — too close to call'}
+          </p>
         </div>
         <span className="week__badge" aria-hidden="true">
           <Icon name="flag" size={18} strokeWidth="1.9" />
         </span>
       </header>
+
+      {nudge && (
+        <p className="week__nudge">
+          <Icon name="flame" size={15} strokeWidth="2" />
+          {nudge}
+        </p>
+      )}
 
       <ul className="week__players">
         {members.map((member, index) => {
@@ -67,9 +122,26 @@ export default function WeekBanner({ week, members, activeId, stakes, onOpenWeek
           return (
             <li key={member.id} className="week__player">
               <p className="week__name">
-                <strong>{member.name}</strong>
-                <span className="week__pct">{pct(score?.score)}%</span>
+                <strong>
+                  {member.name}
+                  {member.id === week.winner && (
+                    <Icon name="trophy" size={13} strokeWidth="2" />
+                  )}
+                </strong>
+                <span className="week__pct">
+                  {(week.handicapped
+                    ? (score?.adjusted ?? 0)
+                    : (score?.points ?? 0)
+                  ).toLocaleString()}
+                  <span className="week__unit"> pts</span>
+                </span>
               </p>
+
+              {week.handicapped && (
+                <p className="week__raw label">
+                  {(score?.points ?? 0).toLocaleString()} banked × {handicapOf(member)}
+                </p>
+              )}
 
               <div
                 className="meter"
@@ -77,7 +149,9 @@ export default function WeekBanner({ week, members, activeId, stakes, onOpenWeek
                 aria-valuenow={pct(score?.score)}
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-label={`${member.name}'s week against their usual`}
+                aria-label={`${member.name} has banked ${score?.points ?? 0} points, ${pct(
+                  score?.score
+                )}% of a good week`}
               >
                 <span
                   style={{
@@ -109,6 +183,31 @@ export default function WeekBanner({ week, members, activeId, stakes, onOpenWeek
                   </button>
                 )}
               </p>
+
+              {/* Both of you can move either handicap. It is a number you agree
+                  on out loud; the app is not the referee. */}
+              {onHandicap && row?.status !== 'settled' && (
+                <p className="week__handicap label">
+                  <span>handicap</span>
+                  <button
+                    type="button"
+                    aria-label={`Lower ${member.name}'s handicap`}
+                    disabled={handicapOf(member) <= HANDICAP_MIN}
+                    onClick={() => bump(member, -HANDICAP_STEP)}
+                  >
+                    −
+                  </button>
+                  <strong>×{handicapOf(member).toFixed(2)}</strong>
+                  <button
+                    type="button"
+                    aria-label={`Raise ${member.name}'s handicap`}
+                    disabled={handicapOf(member) >= HANDICAP_MAX}
+                    onClick={() => bump(member, HANDICAP_STEP)}
+                  >
+                    +
+                  </button>
+                </p>
+              )}
             </li>
           )
         })}
@@ -176,8 +275,8 @@ export default function WeekBanner({ week, members, activeId, stakes, onOpenWeek
           )}
 
           <p className="week__note label">
-            Whoever wins claims what the other one put up. Nobody owes a
-            forfeit — someone just gets spoiled.
+            Most points on Saturday night takes the week and claims what the
+            other one put up. Nobody owes a forfeit — someone just gets spoiled.
           </p>
         </div>
       )}

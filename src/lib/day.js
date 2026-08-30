@@ -38,24 +38,6 @@ export const shiftDay = (key, days) => {
   return dayKey(date)
 }
 
-/**
- * Consecutive goal-hit days ending today (or yesterday, if today is still
- * open). Derived from the stored dates rather than a running counter, so
- * unchecking a habit correctly walks the streak back.
- */
-export const streakFrom = (goalDates, today = dayKey()) => {
-  const hit = new Set(goalDates)
-  let cursor = hit.has(today) ? today : shiftDay(today, -1)
-  let streak = 0
-
-  while (hit.has(cursor)) {
-    streak += 1
-    cursor = shiftDay(cursor, -1)
-  }
-
-  return streak
-}
-
 /** The last `count` days, oldest first - for the streak strip and charts. */
 export const recentDays = (count, today = dayKey()) =>
   Array.from({ length: count }, (_, i) => shiftDay(today, i - (count - 1)))

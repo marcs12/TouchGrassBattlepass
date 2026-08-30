@@ -7,9 +7,11 @@ export default function RewardCard({
   owned,
   inCart,
   editing,
+  wished,
   onAdd,
   onEdit,
   onRemove,
+  onWish,
 }) {
   const tier = TIERS[reward.tier] ?? TIERS.low
   const affordable = balance >= reward.cost
@@ -24,6 +26,23 @@ export default function RewardCard({
       <div className="card__art">
         <Icon name={reward.icon} size={54} strokeWidth="1.9" />
         <span className="card__tier">{tier.label}</span>
+
+        {/* Pinning is shared: both phones start seeing the bank measured
+            against this one thing. */}
+        {onWish && !editing && (
+          <button
+            type="button"
+            className={`card__pin ${wished ? 'card__pin--on' : ''}`}
+            aria-pressed={wished}
+            aria-label={
+              wished ? `Stop saving for ${reward.title}` : `Save for ${reward.title}`
+            }
+            title={wished ? 'Saving for this' : 'Save for this'}
+            onClick={() => onWish(wished ? null : reward.id)}
+          >
+            <Icon name="target" size={14} strokeWidth="2.2" />
+          </button>
+        )}
         {inCart > 0 ? (
           <span className="card__owned card__owned--cart">
             <Icon name="cart" size={12} />×{inCart}

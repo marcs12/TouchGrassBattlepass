@@ -271,6 +271,7 @@ h3 {
 
 .bank {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 7px 13px;
@@ -2161,8 +2162,35 @@ h3 {
 }
 
 .toast__spark {
-  margin-left: auto;
   color: var(--accent);
+}
+
+.toast__dismiss {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  border: 0;
+  background: none;
+}
+
+/* Undo. Wide enough to hit with a thumb on the phone that just mis-tapped. */
+.toast__action {
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--ink);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.toast__action:active {
+  transform: translateY(1px);
 }
 
 .sync {
@@ -2765,6 +2793,27 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
+/* The unit rides along at label size so the number is what you read. */
+.week__unit {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+/* Who is ahead, and by how much - the whole point of the week. */
+.week__lead {
+  margin: 3px 0 0;
+  color: var(--ink-2);
+}
+
+/* The leader's name carries the cup. */
+.week__name strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
 .week__stake,
 .week__team {
   display: flex;
@@ -3194,6 +3243,187 @@ h3 {
   flex: 0 0 auto;
   gap: 8px;
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- this week: the nudge, the raw score, the handicap ---------- */
+
+/* Friday and Saturday, when the week is still winnable. Loud enough to read
+   from across the room, quiet enough not to be a warning. */
+.week__nudge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  border: var(--border-w) dashed var(--ink-3);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* What was actually banked, under what the race is counting. */
+.week__raw {
+  margin: 2px 0 0;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.week__handicap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  color: var(--ink-3);
+}
+
+.week__handicap strong {
+  min-width: 44px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.week__handicap button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.week__handicap button:disabled {
+  opacity: 0.35;
+}
+
+.week__handicap button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* ---------- weekly habits, and forgiven days ---------- */
+
+/* Where a weekly habit is in its week. Unticked on Monday and unticked on
+   Saturday are not the same situation. */
+.habit__hint {
+  margin-top: 2px;
+  color: var(--ink-3);
+}
+
+.streak__skips {
+  color: var(--ink-3);
+}
+
+/* A day that was missed and forgiven: present, but not a tick. */
+.streak__day--skip .streak__dot {
+  border-style: dashed;
+  background: var(--surface-2);
+}
+
+.streak__skip {
+  width: 9px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: var(--ink-3);
+}
+
+/* ---------- the thing you are saving for ---------- */
+
+.bank__wish {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  margin-top: 5px;
+}
+
+.meter--thin {
+  height: 8px;
+  padding: 1.5px;
+  border-width: 1.5px;
+}
+
+.bank__wish-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 140px;
+  overflow: hidden;
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card__pin {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink-3);
+}
+
+.card__pin--on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.card__pin:active {
+  transform: translateY(1px);
+}
+
+/* A finished season, and the way into the next one. Reads as a card because
+   it is the one thing on the page you are meant to press. */
+.rollover {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 18px 16px;
+  text-align: center;
+  border-radius: var(--radius-lg);
+  border: var(--border-w) dashed var(--ink-3);
+  background: var(--surface-2);
+}
+
+.rollover__art {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: var(--border-w) solid var(--ink);
+  background: var(--tier-high);
+  color: var(--badge-ink);
+}
+
+.rollover__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: var(--display-weight);
+}
+
+.rollover__note {
+  margin: 0 0 4px;
+  max-width: 46ch;
+  color: var(--ink-2);
+}
+
+/* A past season is a record, not a door - so it doesn't press. */
+.shelf__card--still:active {
+  transform: none;
+  box-shadow: 2px 2px 0 var(--shadow-color);
 }
 
 /* A prize cost nothing, so it isn't a debit. */

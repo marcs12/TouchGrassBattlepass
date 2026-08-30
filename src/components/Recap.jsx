@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Icon from './Icon'
 import Progress from './Progress'
 import ProofImage from './ProofImage'
@@ -41,6 +41,7 @@ export default function Recap({
   proofs,
   stamps,
   proofUrl,
+  loadWeek,
   onOpened,
   onClose,
 }) {
@@ -50,14 +51,37 @@ export default function Recap({
   const [frame, setFrame] = useState(0)
   const [held, setHeld] = useState(false)
 
+  // The board only holds the last few weeks of days, so a Sunday further back
+  // than that arrives here with an empty chart and an empty reel. Those weeks
+  // go and fetch themselves rather than every launch reading a wider window.
+  const inWindow = history.length > 0 && start >= history[0].day
+  const [fetched, setFetched] = useState(null)
+  const asked = useRef(null)
+
+  // Guarded by the week it asked for rather than by the effect's own lifetime:
+  // `loadWeek` changes identity whenever the board does, and marking the recap
+  // opened changes the board, so a cleanup-based guard would cancel the very
+  // fetch this just started.
+  useEffect(() => {
+    if (inWindow || !loadWeek || asked.current === start) return
+    asked.current = start
+    setFetched(null)
+    loadWeek(start).then((data) => {
+      if (data && asked.current === start) setFetched(data)
+    })
+  }, [inWindow, start, loadWeek])
+
   const days = useMemo(
-    () => history.filter((row) => row.day >= start && row.day <= end),
-    [history, start, end]
+    () => fetched?.history ?? history.filter((row) => row.day >= start && row.day <= end),
+    [fetched, history, start, end]
   )
   const reel = useMemo(
-    () => proofs.filter((p) => p.day >= start && p.day <= end),
-    [proofs, start, end]
+    () => fetched?.proofs ?? proofs.filter((p) => p.day >= start && p.day <= end),
+    [fetched, proofs, start, end]
   )
+  const marks = fetched?.goalDates ?? goalDates
+  const stampRows = fetched?.stamps ?? stamps
+  const loading = !inWindow && !fetched && Boolean(loadWeek)
 
   useEffect(() => {
     onOpened?.(start)
@@ -89,12 +113,13 @@ export default function Recap({
   )
   const bestDay = days[totals.indexOf(Math.max(0, ...totals))]
   const cleared = days.filter((d) =>
-    members.some((m) => (goalDates?.[m.id] ?? []).includes(d.day))
+    members.some((m) => (marks?.[m.id] ?? []).includes(d.day))
   ).length
 
   const stampsThisWeek = members.map((m) => ({
     ...m,
-    given: stamps.filter((s) => s.memberId === m.id && s.day >= start && s.day <= end).length,
+    given: stampRows.filter((s) => s.memberId === m.id && s.day >= start && s.day <= end)
+      .length,
   }))
   const kindest = [...stampsThisWeek].sort((a, b) => b.given - a.given)[0]
 
@@ -145,24 +170,28 @@ export default function Recap({
           </div>
         )}
 
-        <Progress history={days} members={members} goalDates={goalDates} fixed="week" />
+        {loading ? (
+          <p className="empty">Fetching that week…</p>
+        ) : (
+          <Progress history={days} members={members} goalDates={marks} fixed="week" />
+        )}
 
         <div className="recap__stats">
           {members.map((member) => {
             const mine = score.members?.[member.id]
             return (
               <p key={member.id}>
-                <strong>{Math.round((mine?.score ?? 0) * 100)}%</strong>
+                <strong>{(mine?.points ?? 0).toLocaleString()}</strong>
                 <span className="label">
-                  {member.name} · {(mine?.points ?? 0).toLocaleString()} of{' '}
-                  {(mine?.target ?? 0).toLocaleString()} usual
+                  {member.name} · {Math.round((mine?.score ?? 0) * 100)}% of a good
+                  week
                 </span>
               </p>
             )
           })}
           <p>
             <strong>{cleared}</strong>
-            <span className="label">full lists cleared</span>
+            <span className="label">days that counted</span>
           </p>
           <p>
             <strong>{reel.length}</strong>

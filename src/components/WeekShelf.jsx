@@ -13,6 +13,9 @@ const range = (start) => {
 /**
  * Every Sunday you've had, oldest pushed to the back. A season of these is
  * the thing the app is actually for - the points are just how you get here.
+ *
+ * The two numbers on the right are what each of you banked that week; the week
+ * went to whoever banked more.
  */
 export default function WeekShelf({ weeks, members, onOpen }) {
   const settled = weeks.filter((w) => w.status === 'settled')
@@ -42,7 +45,7 @@ export default function WeekShelf({ weeks, members, onOpen }) {
                 <span className="shelf__scores label">
                   {members.map((m, i) => (
                     <span key={m.id} style={{ color: `var(--series-${i + 1})` }}>
-                      {Math.round((week.score?.members?.[m.id]?.score ?? 0) * 100)}%
+                      {(week.score?.members?.[m.id]?.points ?? 0).toLocaleString()}
                     </span>
                   ))}
                 </span>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Icon from './Icon'
 
-const HABIT_ICONS = ['walk', 'dumbbell', 'moon', 'droplet', 'pot', 'broom', 'book', 'phoneoff', 'mountain', 'heart', 'basket', 'spark']
+const HABIT_ICONS = ['walk', 'dumbbell', 'moon', 'droplet', 'pot', 'broom', 'book', 'phoneoff', 'mountain', 'heart', 'basket', 'receipt', 'ticket', 'cart', 'spark']
 const REWARD_ICONS = ['coffee', 'icecream', 'wrap', 'moped', 'film', 'sushi', 'spa', 'serum', 'shirt', 'shoe', 'bag', 'ticket', 'car', 'hotel', 'gamepad', 'plane']
 // A stake is a favour, not a purchase: it has no price and no tier.
 const STAKE_ICONS = ['coffee', 'film', 'spa', 'broom', 'car', 'sushi', 'heart', 'gift', 'moon', 'basket']
@@ -137,6 +137,7 @@ export default function ItemForm({ kind, editing, onAdd, onCancel }) {
             {isHabit ? (
               <>
                 <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
                 <option value="bonus">Bonus</option>
               </>
             ) : (

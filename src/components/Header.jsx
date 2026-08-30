@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { SEASON, seasonName } from '../data/season'
 import { useCountUp } from '../lib/useCountUp'
 import Icon from './Icon'
 import ThemePicker from './ThemePicker'
@@ -15,6 +16,8 @@ const TABS = [
 
 export default function Header({
   balance,
+  wish,
+  season,
   tab,
   onTab,
   redeemedCount,
@@ -60,7 +63,9 @@ export default function Header({
         </button>
         <div className="brand__id">
           <h1 className="brand__name">Touch Grass Battlepass</h1>
-          <p className="brand__season label">Season 1 · Co-op</p>
+          <p className="brand__season label">
+            {seasonName(season?.n ?? 1)} · {SEASON.subtitle}
+          </p>
         </div>
       </div>
 
@@ -111,6 +116,31 @@ export default function Header({
             >
               {pop.delta > 0 ? '+' : ''}
               {pop.delta.toLocaleString()}
+            </span>
+          )}
+
+          {/* Something to save for beats a bare number: the bank means more
+              when it is measured against the thing you both want. */}
+          {wish && (
+            <span className="bank__wish">
+              <span
+                className="meter meter--thin"
+                role="progressbar"
+                aria-valuenow={wish.progress}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={
+                  wish.ready
+                    ? `${wish.title} is affordable`
+                    : `Saving for ${wish.title}`
+                }
+              >
+                <span style={{ width: `${wish.progress}%` }} />
+              </span>
+              <span className="bank__wish-text label">
+                <Icon name={wish.ready ? 'check' : 'target'} size={11} strokeWidth="2.2" />
+                {wish.ready ? `${wish.title} — ready` : wish.title}
+              </span>
             </span>
           )}
         </div>

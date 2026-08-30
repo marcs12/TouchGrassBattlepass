@@ -1,14 +1,18 @@
-// Season track. XP is lifetime points *earned* - spending in the store never
+// Season track. XP is points *earned* this season - spending in the store never
 // pulls the track backwards, so the two currencies can't fight each other.
 //
 // Tier rewards come in two shapes:
 //   bonus - credits the shared bank when claimed
 //   perk  - an agreed-on real-world payoff; claiming just marks it owed
+//
+// The same twelve tiers run every season. Finishing the track is what opens
+// the next one, and the bank and the coupons come with you - see
+// supabase/005-seasons.sql for what a rollover moves and what it leaves.
 export const SEASON = {
-  id: 's1',
-  name: 'Season 1',
   subtitle: 'Co-op',
 }
+
+export const seasonName = (n = 1) => `Season ${n}`
 
 export const TIERS_TRACK = [
   {
@@ -109,8 +113,8 @@ export const TIERS_TRACK = [
     n: 12,
     xp: 9000,
     type: 'perk',
-    title: 'Season 1 Champion',
-    note: 'Bragging rights, and the trophy stays on your shelf.',
+    title: 'Season Champion',
+    note: 'Bragging rights, the trophy, and the next season starts here.',
     icon: 'trophy',
   },
 ]

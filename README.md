@@ -6,19 +6,22 @@ both agreed on ahead of time.
 
 ## How it works
 
-1. **Daily Grind** - You each keep your own checklist. If you both did it, you
-   both check it and you both get paid. Clearing *every* daily habit is what
-   keeps your streak alive - the streak row shows how many are left.
+1. **Daily Grind** - You each keep your own checklist, in three lists: daily
+   habits that reset every night, weekly ones ticked once per calendar week on
+   whichever day you get to them, and bonus efforts with no reset at all. If
+   you both did it, you both check it and you both get paid. Any three
+   check-offs in a day keeps your streak alive.
 2. **Shared bank** - Everything either of you earns lands in one pooled
    balance. Personal totals are a record of who contributed, not a wallet.
 3. **Season Pass** - Points earned are season XP. Twelve tiers hand out bonus
    points or agreed-on real-world perks. Spending never costs track progress.
+   Finishing the track opens the next season; the bank comes with you.
 4. **Store** - Shop the reward catalog: fill a cart, then check out.
 5. **Coupons** - Every redeemed reward is a coupon until someone cashes it in.
    Used ones grey out instead of disappearing.
 6. **Sunday Night** - The week is its own thing: you each put something up,
-   the week closes on Saturday, and on Sunday evening the recap hands the
-   winner what the other one wagered.
+   whoever banks more points over the seven days takes it, and on Sunday
+   evening the recap hands the winner what the other one wagered.
 
 Habits and rewards can be added and removed in the app - the lists that ship
 in code are just the starting point.
@@ -57,8 +60,12 @@ This is the whole setup:
    security policies, and the functions the app calls. Then run
    `supabase/002-catalog-and-coupons.sql` (custom catalog entries and the
    used-coupon flag), `supabase/003-zero-seed-balance.sql` (start a season
-   with an empty bank) and `supabase/004-weeks-and-proof.sql` (Sunday Night:
-   weeks, stamps and the private bucket proof photos go in).
+   with an empty bank), `supabase/004-weeks-and-proof.sql` (Sunday Night:
+   weeks, stamps and the private bucket proof photos go in),
+   `supabase/005-seasons.sql` (seasons end and roll over into the next one),
+   `supabase/006-week-on-points.sql` (the week is won on points banked) and
+   `supabase/007-handicap-and-wish.sql` (per-player handicap, and a reward to
+   save toward).
 3. **Turn on anonymous sign-ins.** Authentication -> Sign In / Providers ->
    enable *Anonymous sign-ins*. Devices never make an account; they get an
    anonymous identity that is tied to your household.
@@ -104,8 +111,14 @@ Nothing stores a balance. Every point is derived from rows:
 balance = seed_balance + habit points + claimed tier bonuses - redemptions
 ```
 
-`seed_balance` is zero for new households: a season starts empty, so every
+`seed_balance` is zero for new households: a board starts empty, so every
 point in the bank was earned by someone.
+
+That sum is over *every* check-off ever, while the app only reads the last
+forty-five days of them. The points banked before that window come back as one
+number from `points_before()`, so the bank on screen is the whole board's and
+not the last six weeks of it. Season XP is the same total measured from where
+the season started - see **Seasons** below.
 
 A check-off is one row, so two phones checking things off at the same moment
 insert two rows instead of overwriting each other's totals. Spending goes
@@ -141,7 +154,8 @@ src/
     proofStore.js          IndexedDB blobs for photos
     useCountUp.js          rolling number animation
   theme/                   token definitions + provider
-  data/                    rewards, habits, season track, week scoring
+  data/                    rewards, habits, season track, week scoring,
+                           photo thinning
   components/              UI
 supabase/schema.sql        tables, RLS policies, functions
 ```
@@ -176,9 +190,14 @@ To change the defaults themselves:
 
 - `src/data/rewards.js` - the store. Each entry needs `id`, `title`,
   `description`, `cost`, `tier`, `icon` and `hue`.
-- `src/data/habits.js` - daily and bonus habits and their point values.
-- `src/data/season.js` - the twelve season tiers.
-- `src/data/week.js` - week boundaries, scoring, and the starting stakes.
+- `src/data/habits.js` - daily, weekly and bonus habits and their point values.
+- `src/data/streak.js` - what keeps a streak alive: how many check-offs a day
+  needs, and how many misses a month is forgiven.
+- `src/data/season.js` - the twelve season tiers, run every season.
+- `src/data/week.js` - week boundaries, scoring, what a good week is worth,
+  the handicap range, and the starting stakes.
+- `src/data/proof.js` - how long photo reels are kept, and how much of one an
+  old week keeps.
 - `src/data/catalog.js` - merges the shipped lists with a household's own.
 
 Icons come from the stroke set in `src/components/Icon.jsx`; add a path there
@@ -204,10 +223,12 @@ What it gives you:
 | Settle last week | Scores it on the spot instead. The server still refuses a week that hasn't ended |
 | Grant points | Lands as a habit check, so the bank and season XP move together |
 | Clear daily list | Fills every daily habit for the active player in one tap |
-| Seed 6-day streak | Backfills cleared days so the streak strip has history |
+| Seed 6-day streak | Backfills counted days so the streak strip has history |
 | Clear today / refetch | Undo a test run, or force a re-read in synced mode |
 | Grant or take back points | +10 through +2,500, and -10 through -100. Taking points back can't overdraw the bank |
-| Clear all points | Wipes points, receipts and claimed tiers back to a fresh bank. Asks twice, since in synced mode it hits both players |
+| End season | Rolls the track over without waiting for all twelve tiers |
+| Thin old photos | Runs the photo thinning pass on the spot and says how many went |
+| Clear all points | Wipes points, receipts, claimed tiers, weeks, stamps and seasons back to a fresh bank. Asks twice, since in synced mode it hits both players |
 | Leave board / wipe local | Returns this device to setup without touching shared data |
 
 Everything writes through the normal data path, so in synced mode a seeded day
@@ -276,6 +297,15 @@ the queue rather than holding up a single check-off. Photos are shrunk to about
 80KB on the device before they go anywhere, and re-encoding through a canvas
 drops the EXIF - the location tag included - on the way out.
 
+Reels are thinned as they age. The last eight weeks keep every photo; older
+weeks keep their newest three and let the rest go, which is what stops a bucket
+that only ever grows. The check-off itself is untouched - the points stay, the
+log entry stays, only the picture goes - and the cutoff sits further back than
+the window the app reads, so nothing is ever taken out from under a reel on
+screen. It runs once per launch, in the background, and the rule lives in
+`src/data/proof.js` if eight weeks and three photos are the wrong numbers for
+you.
+
 **Stamps.** The other one's check-offs can be stamped from the contribution
 log. A stamp is worth **no points at all**, deliberately: the balance is
 derived from check-offs, tier claims and redemptions, so a second source of
@@ -284,12 +314,37 @@ worth being seen, and it feeds the recap.
 
 **The week.** Sunday to Saturday - the calendar week you already read on a
 wall, which is also what the streak strip shows, so the two never disagree
-about which week you are in. Each of you is scored against the median of your
-own last four weeks rather than against each other: a brutal week at work
-shouldn't hand the other one an automatic win, and a personal best should beat
-a coast. A margin under 5% is a dead heat. Both of you put a stake up; the
-winner claims what the other one wagered. Nobody owes a forfeit. Clear your
+about which week you are in. It is a straight race: **whoever banks more points
+over the seven days takes the week.** A lead under 5% of the leader's own total
+is a dead heat, and a week where neither of you banked anything is one too.
+
+It used to score each of you against the median of your own last four weeks.
+That read well and played badly - the target moved every time you had a good
+week, so a strong run quietly raised the bar on the person having it, and a
+week where somebody simply did more could still go to the other one. Two people
+who live together already know whose week was harder; they do not need the
+database to model it.
+
+The bar on each player is progress toward a good week - five full daily lists
+plus the weekly list - and it decides nothing. Five rather than seven on
+purpose: a target you only reach by never missing a day is a target that gets
+missed, and missing things is what happens. Both of you put a stake up; the
+winner claims what the other one wagered. Nobody owes a forfeit. Clear the
 combined target and you both get the shared prize on top.
+
+**The handicap.** A race on raw points quietly favours whoever has the lighter
+week at work. Rather than have the database guess at that - which is what the
+old median target was doing - each player carries a multiplier you both agree
+on out loud, from ×0.50 to ×2.00, changed with the − and + under their stake.
+Both of you can move either one; the app is not the referee. At ×1.00 on both
+sides, which is the default and the case everything is tuned for, nothing about
+the week changes and the banner shows only points banked.
+
+**The nudge.** On the last two days of a week that is still in play, the banner
+says where you stand: how far behind you are, that it is dead level, or that
+your lead is thin enough not to coast on. Friday and Saturday are when a week
+is actually won, and a running total that never says anything is easy to stop
+reading.
 
 **The recap.** The week closes at Saturday midnight and the recap is due the
 following evening, so Sunday Night is the look back rather than the deadline.
@@ -299,11 +354,62 @@ the point of the ritual - and flips on its own after a day so nobody is
 stranded when their partner is away. Past weeks stack up on a shelf under the
 Season Pass chart.
 
+Opening one from that shelf works however far back it is. The board itself only
+reads the last forty-five days of check-offs, so an older Sunday goes and
+fetches its own week - chart, reel and all - rather than every launch paying for
+a wider window.
+
 Prizes are minted as zero-cost coupons in the Redeemed tab, so a stake can be
 won without a second economy to keep track of, and the bank never moves.
 
 Stakes are edited in the app like habits and rewards are - the six that ship in
 code are just the starting point.
+
+## Seasons
+
+Twelve tiers is a few months of ordinary weeks. When the last one is claimed
+the pass is finished, and the Season Pass tab offers the next one.
+
+Rolling over resets exactly one thing: the track. Season XP goes back to zero
+and all twelve tiers unlock again. **The bank, every coupon, your streaks, the
+catalogs and every Sunday on the shelf stay where they are** - points are money
+and the pass is a track, and spending has never pulled the track backwards, so
+finishing a season must not empty the wallet either. Finished seasons keep
+their final XP on a shelf of their own under the chart.
+
+The button won't roll over while a tier you have earned is still unclaimed: the
+claims reset with the season, and walking away from a bonus you earned is not
+something to do by accident. Claim them, then start the next one.
+
+Under the hood a season is a row holding the lifetime XP it opened at, so a
+season's XP is simply what has been earned since. The boundary is an instant
+rather than a day - points banked later the same afternoon belong to the new
+season - and no check row is rewritten or double-counted at the seam. Ending is
+one server function, idempotent the same way `settle_week` is, so both phones
+pressing it at once rolls over exactly once.
+
+The same twelve tiers run every season. If you want season 2 to look different,
+`src/data/season.js` is the whole track.
+
+## Streaks
+
+A day counts toward your streak once you have checked off **three** of
+anything - daily, weekly or bonus. It used to take the whole daily list, which
+made the streak a record of perfect days and therefore, mostly, a record of
+broken ones. Three is a day you showed up, and showing up is what the streak is
+there to measure.
+
+**Two misses a month are forgiven.** A streak that dies to one flight, one
+illness or one bad Tuesday stops being something you protect and starts being
+something you resent. A missed day spends a skip from that day's own month; run
+out in a month and the streak ends there. The strip shows a forgiven day as a
+dashed ring rather than a tick, and the streak line says how many skips are
+left.
+
+Both numbers live in `src/data/streak.js` as `STREAK_MIN_CHECKS` and
+`STREAK_SKIPS_PER_MONTH`. Streaks are per player and derived from the days
+themselves rather than a running counter, so un-ticking a habit correctly walks
+the streak back.
 
 ## Living with it
 
@@ -316,11 +422,16 @@ A few things exist because two people share this on two phones:
   on a patchy connection doesn't leave you guessing.
 - **Haptics** - a short buzz on check-off and checkout. Android only; Safari on
   iOS has no vibration API, so it degrades to nothing.
-- **Celebrations** - streaks at 3, 7, 14 and 30 days, and every claimed tier.
-  Milestones already passed are backfilled silently the first time, so nothing
-  throws a party for something you did last week.
+- **Celebrations** - streaks at 3, 7, 14 and 30 days, every claimed tier, and
+  the end of a season. Milestones already passed are backfilled silently the
+  first time, so nothing throws a party for something you did last week.
+- **Undo** - a check-off puts its own way back out on screen for six seconds. A
+  mis-tap is the easiest mistake to make here, and hunting for the row you just
+  touched is a silly way to fix it.
+- **Something to save for** - pin any reward in the store and the shared bank
+  is shown against it instead of as a bare number. It is pinned for both of
+  you, because it is one bank.
 
 ## Still to do
 
-- Season end and rollover into Season 2
-- Thinning old weeks' photo reels once the storage bucket fills up
+Nothing outstanding.

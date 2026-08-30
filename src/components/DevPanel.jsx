@@ -20,6 +20,7 @@ export default function DevPanel({ game, onClose }) {
   // Wiping the board hits both players in synced mode, so it asks twice.
   const [armed, setArmed] = useState(false)
   const [wipeNote, setWipeNote] = useState(null)
+  const [thinNote, setThinNote] = useState(null)
   const dev = game.dev ?? {}
 
   const clearPoints = async () => {
@@ -36,6 +37,15 @@ export default function DevPanel({ game, onClose }) {
             ', '
           )} - run supabase/dev-reset.sql to allow those too.`
         : `Cleared ${result.cleared.join(', ')}.`
+    )
+  }
+
+  const thin = async () => {
+    const result = await dev.thinProofs?.()
+    setThinNote(
+      result?.removed
+        ? `Let go of ${result.removed} old photo${result.removed > 1 ? 's' : ''}.`
+        : 'Nothing old enough to thin.'
     )
   }
 
@@ -90,7 +100,9 @@ export default function DevPanel({ game, onClose }) {
           <Row label="Today">{today()}</Row>
           {offset !== 0 && <Row label="Offset">{offset > 0 ? `+${offset}` : offset} days</Row>}
           <Row label="Bank">{game.balance?.toLocaleString()}</Row>
-          <Row label="Season XP">{game.season?.xp?.toLocaleString()}</Row>
+          <Row label="Season">
+            {game.season?.n ?? 1} · {game.season?.xp?.toLocaleString()} XP
+          </Row>
           {game.code && <Row label="Code">{game.code}</Row>}
           <Row label="Playing as">
             {game.members?.find((m) => m.id === game.activeId)?.name ?? '—'}
@@ -179,6 +191,25 @@ export default function DevPanel({ game, onClose }) {
         </section>
 
         <section className="dev__group">
+          <p className="label">Season</p>
+          <div className="dev__buttons">
+            <button type="button" className="dev__btn" onClick={() => dev.endSeason?.()}>
+              end season
+            </button>
+            <button type="button" className="dev__btn" onClick={thin}>
+              thin old photos
+            </button>
+          </div>
+          <p className="dev__hint">
+            Ending rolls the track over without waiting for all twelve tiers -
+            the bank, the coupons and the Sundays carry across, and the claims
+            reset. Thinning drops all but the newest few photos of any week
+            older than eight, which is what runs by itself on launch.
+          </p>
+          {thinNote && <p className="dev__hint">{thinNote}</p>}
+        </section>
+
+        <section className="dev__group">
           <p className="label">Data</p>
           <div className="dev__buttons">
             <button type="button" className="dev__btn" onClick={() => dev.seedHistory?.(6)}>
@@ -213,8 +244,8 @@ export default function DevPanel({ game, onClose }) {
           </div>
           <p className="dev__hint">
             {game.mode === 'cloud'
-              ? 'Wipes points, receipts, tier claims, weeks and stamps for both players, back to a fresh bank.'
-              : 'Wipes points, receipts, tier claims, weeks and stamps back to a fresh bank.'}
+              ? 'Wipes points, receipts, tier claims, weeks, stamps and seasons for both players, back to a fresh bank.'
+              : 'Wipes points, receipts, tier claims, weeks, stamps and seasons back to a fresh bank.'}
           </p>
           {wipeNote && <p className="dev__hint">{wipeNote}</p>}
         </section>

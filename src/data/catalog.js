@@ -1,4 +1,4 @@
-import { BONUS_HABITS, DAILY_HABITS } from './habits'
+import { BONUS_HABITS, DAILY_HABITS, WEEKLY_HABITS } from './habits'
 import { REWARDS } from './rewards'
 import { STAKES } from './week'
 
@@ -54,12 +54,18 @@ const merge = (builtIns, catalog, kind) => {
   return [...kept, ...custom]
 }
 
-// Both lists come from one merge, so an edit can move a habit between them.
-const habitsFrom = (catalog) => merge([...DAILY_HABITS, ...BONUS_HABITS], catalog, 'habit')
+// All three lists come from one merge, so an edit can move a habit between
+// them - daily to weekly is a change of pace, not a different habit.
+const habitsFrom = (catalog) =>
+  merge([...DAILY_HABITS, ...WEEKLY_HABITS, ...BONUS_HABITS], catalog, 'habit')
 
+// Daily is the default: an entry with no `kind` at all is one, which is what
+// keeps saves written before weekly existed reading the same way.
 export const dailyHabitsFrom = (catalog = []) =>
-  habitsFrom(catalog).filter((h) => h.kind !== 'bonus')
+  habitsFrom(catalog).filter((h) => h.kind !== 'bonus' && h.kind !== 'weekly')
 
+export const weeklyHabitsFrom = (catalog = []) =>
+  habitsFrom(catalog).filter((h) => h.kind === 'weekly')
 
 export const bonusHabitsFrom = (catalog = []) =>
   habitsFrom(catalog).filter((h) => h.kind === 'bonus')
@@ -69,6 +75,10 @@ export const rewardsFrom = (catalog = []) => merge(REWARDS, catalog, 'reward')
 /** What either of you can put up for the week. Same three jobs as the rest. */
 export const stakesFrom = (catalog = []) => merge(STAKES, catalog, 'stake')
 
-/** Clearing every daily habit is what keeps a streak alive. */
+/** What a full daily list pays - the pace a week's target is built from. */
 export const dailyGoalFrom = (catalog = []) =>
   dailyHabitsFrom(catalog).reduce((sum, h) => sum + h.points, 0)
+
+/** What a full weekly list pays. */
+export const weeklyGoalFrom = (catalog = []) =>
+  weeklyHabitsFrom(catalog).reduce((sum, h) => sum + h.points, 0)

@@ -25,3 +25,9 @@ create policy weeks_delete on weeks
 drop policy if exists cosigns_delete on cosigns;
 create policy cosigns_delete on cosigns
   for delete using (household_id in (select my_households()));
+
+-- Added with migration 5. Wiping a board takes its seasons with it; the next
+-- claim opens season 1 again from wherever the (now empty) lifetime total is.
+drop policy if exists seasons_delete on seasons;
+create policy seasons_delete on seasons
+  for delete using (household_id in (select my_households()));

@@ -7,9 +7,11 @@ import {
   rewardsFrom,
   slugify,
   stakesFrom,
+  weeklyHabitsFrom,
 } from '../data/catalog'
+import { STREAK_MIN_CHECKS } from '../data/streak'
 import { recentDays, shiftDay, today as todayKey } from '../lib/day'
-import { minTargetFor, recapReady, scoreWeek, weekStart } from '../data/week'
+import { recapReady, scoreWeek, weekDays, weekStart, weekTargetFor } from '../data/week'
 import {
   applyPending,
   cacheRows,
@@ -20,6 +22,7 @@ import {
 } from '../lib/queue'
 import { getProof, putProof, removeProof } from '../lib/proofStore'
 import { prepare } from '../lib/photo'
+import { thinBefore, thinnable } from '../data/proof'
 
 // Supabase-backed mode: two devices, one board.
 //
@@ -33,6 +36,8 @@ const PROOF_BUCKET = 'proof'
 // Weeks are settled on open rather than by a cron, so a pair who didn't
 // launch the app for a fortnight still gets every recap they missed.
 const SETTLE_BACKLOG = 4
+// How many old photos one pass lets go at a time.
+const THIN_BATCH = 100
 
 // Signing a URL is a round trip, and a recap reel asks for the same handful
 // over and over. Cache under the expiry so a scroll doesn't re-sign anything.
@@ -81,6 +86,7 @@ function project(rows, today) {
   const { household, members, checks, redemptions, claims } = rows
   const catalog = rows.catalog ?? []
   const weeks = rows.weeks ?? []
+  const seasons = rows.seasons ?? []
   const dailyHabits = dailyHabitsFrom(catalog)
 
   // Stamps, hung off the check they belong to.
@@ -96,7 +102,7 @@ function project(rows, today) {
 
   const roster = [...members]
     .sort((a, b) => a.slot - b.slot)
-    .map((m) => ({ id: m.id, name: m.name, slot: m.slot }))
+    .map((m) => ({ id: m.id, name: m.name, slot: m.slot, handicap: m.handicap ?? 1 }))
 
   const earned = Object.fromEntries(roster.map((m) => [m.id, 0]))
   const done = {}
@@ -111,14 +117,30 @@ function project(rows, today) {
     byMemberDay.set(key, [...(byMemberDay.get(key) ?? []), check.habit_id])
   }
 
-  // A day counts toward the streak when that member cleared every daily habit.
+  // A day counts toward the streak once that member has checked off
+  // STREAK_MIN_CHECKS of anything - see data/habits for why it is not the whole
+  // daily list any more.
   const goalDates = {}
   for (const [key, habitIds] of byMemberDay) {
     const [memberId, day] = key.split('|')
-    const cleared = new Set(habitIds)
-    if (dailyHabits.every((h) => cleared.has(h.id))) {
+    if (new Set(habitIds).size >= STREAK_MIN_CHECKS) {
       goalDates[memberId] = [...(goalDates[memberId] ?? []), day]
     }
+  }
+
+  // Every check-off made this week, and the day it was made on. The weekly
+  // list reads its done-state from here rather than from `done`, because a
+  // weekly habit is ticked once for the week on whichever day you got round to
+  // it, and un-ticking has to delete the row on that day.
+  //
+  // It holds every kind, not only the weekly ones: a habit moved from the
+  // daily list to the weekly one mid-week is then already ticked, rather than
+  // paying out a second time for a day it was checked on.
+  const from = weekStart(today)
+  const weekDone = {}
+  for (const check of checks) {
+    if (check.day < from) continue
+    weekDone[check.member_id] = { ...(weekDone[check.member_id] ?? {}), [check.habit_id]: check.day }
   }
 
   // Points per member per day, for the progress chart. Derived from the same
@@ -134,23 +156,53 @@ function project(rows, today) {
     totals: byDay.get(day) ?? {},
   }))
 
+  const weeklyHabits = weeklyHabitsFrom(catalog)
   const dailyGoal = dailyHabits.reduce((sum, h) => sum + h.points, 0)
+  const weeklyGoal = weeklyHabits.reduce((sum, h) => sum + h.points, 0)
   const spent = redemptions.reduce((sum, r) => sum + r.cost, 0)
   const bonuses = claims.reduce((sum, c) => sum + (c.bonus ?? 0), 0)
-  const xp = checks.reduce((sum, c) => sum + c.points, 0)
+
+  // Only the last few weeks of check rows are read, so the points banked
+  // before that window come back as one number from the server. Without it the
+  // bank would quietly shed every point older than the window while the
+  // server - which is what actually authorises spending - kept them.
+  const lifetime = (rows.before ?? 0) + checks.reduce((sum, c) => sum + c.points, 0)
+
+  // The season being played, and the lifetime total it started from. A board
+  // on the pre-seasons schema has no rows here and reads as season 1 from zero,
+  // which is exactly what it was.
+  const season =
+    [...seasons].filter((s) => !s.ended_at).sort((a, b) => b.n - a.n)[0] ?? null
+  const seasonNo = season?.n ?? 1
+  const seasonXp = Math.max(0, lifetime - (season?.xp_base ?? 0))
 
   return {
     code: household?.code ?? null,
     members: roster,
+    // The reward you are both saving toward, if it still exists.
+    wish: household?.wish_reward_id ?? null,
     history,
     dailyHabits,
+    weeklyHabits,
     bonusHabits: bonusHabitsFrom(catalog),
     dailyGoal,
+    weeklyGoal,
     rewards: rewardsFrom(catalog),
-    balance: (household?.seed_balance ?? 0) + xp + bonuses - spent,
+    balance: (household?.seed_balance ?? 0) + lifetime + bonuses - spent,
     earned,
-    grind: { date: today, done, goalDates },
-    season: { xp, claimed: claims.map((c) => c.tier) },
+    grind: { date: today, done, weekDone, goalDates },
+    // Tiers are claimable once per season, so the track only knows about this
+    // one. Their bonuses stay in the bank forever, which is why `bonuses`
+    // above counts every season's.
+    season: {
+      n: seasonNo,
+      xp: seasonXp,
+      claimed: claims.filter((c) => (c.season ?? 1) === seasonNo).map((c) => c.tier),
+    },
+    pastSeasons: seasons
+      .filter((s) => s.ended_at)
+      .sort((a, b) => b.n - a.n)
+      .map((s) => ({ n: s.n, xp: s.final_xp ?? 0, endedAt: s.ended_at })),
     redeemed: redemptions.map((r) => ({
       receiptId: r.id,
       id: r.reward_id,
@@ -186,7 +238,14 @@ function project(rows, today) {
       .filter((c) => c.day),
     weeks,
     week: {
-      ...scoreWeek({ history, members: roster, dailyGoal, start: weekStart(today), today }),
+      ...scoreWeek({
+        history,
+        members: roster,
+        dailyGoal,
+        weeklyGoal,
+        start: weekStart(today),
+        today,
+      }),
       row: weeks.find((w) => w.start_day === weekStart(today)) ?? null,
     },
     // Every photo taken this week, newest first - the recap's raw material.
@@ -214,6 +273,8 @@ const emptyRows = {
   catalog: [],
   weeks: [],
   cosigns: [],
+  seasons: [],
+  before: 0,
 }
 
 export function useCloudGame() {
@@ -273,8 +334,18 @@ export function useCloudGame() {
     if (!id) return
     const since = shiftDay(todayKey(), -HISTORY_DAYS)
 
-    const [household, members, checks, redemptions, claims, catalog, weeks, cosigns] =
-      await Promise.all([
+    const [
+      household,
+      members,
+      checks,
+      redemptions,
+      claims,
+      catalog,
+      weeks,
+      cosigns,
+      seasons,
+      before,
+    ] = await Promise.all([
       supabase.from('households').select('*').eq('id', id).maybeSingle(),
       supabase.from('members').select('*').eq('household_id', id),
       supabase.from('habit_checks').select('*').eq('household_id', id).gte('day', since),
@@ -283,6 +354,10 @@ export function useCloudGame() {
       supabase.from('catalog_items').select('*').eq('household_id', id),
       supabase.from('weeks').select('*').eq('household_id', id).order('start_day', { ascending: false }),
       supabase.from('cosigns').select('*').eq('household_id', id),
+      supabase.from('seasons').select('*').eq('household_id', id).order('n', { ascending: false }),
+      // Everything banked before the window above, so the bank is the whole
+      // board's rather than the last six weeks of it.
+      supabase.rpc('points_before', { p_household: id, p_day: since }),
     ])
 
     // Tables added by a later migration are optional: a household that
@@ -342,6 +417,9 @@ export function useCloudGame() {
       catalog: catalog.error ? [] : (catalog.data ?? []),
       weeks: weeks.error ? [] : (weeks.data ?? []),
       cosigns: cosigns.error ? [] : (cosigns.data ?? []),
+      seasons: seasons.error ? [] : (seasons.data ?? []),
+      // Zero on the older schema, which is what the bank used to assume anyway.
+      before: before.error ? 0 : (before.data ?? 0),
     }
     setRows(next)
     cacheRows(id, next)
@@ -437,10 +515,18 @@ export function useCloudGame() {
       'cosigns',
     ])
 
+    // Seasons came later still, and get their own for the same reason: a board
+    // on the previous schema should lose the rollover's live update, not the
+    // week's as well.
+    const season = listen(supabase.channel(`household-season:${householdId}`), [
+      'seasons',
+    ])
+
     return () => {
       clearTimeout(refetchTimer.current)
       supabase.removeChannel(core)
       supabase.removeChannel(week)
+      supabase.removeChannel(season)
     }
   }, [householdId, scheduleRefetch])
 
@@ -506,7 +592,7 @@ export function useCloudGame() {
           p_household: householdId,
           p_start: start,
           p_today: today,
-          p_min_target: minTargetFor(view.dailyGoal),
+          p_week_target: weekTargetFor(view.dailyGoal, view.weeklyGoal),
         })
         if (!rpcError) changed = true
       }
@@ -697,20 +783,27 @@ export function useCloudGame() {
     async (habit) => {
       if (!householdId || !activeId) return
 
-      const checkedToday = view.grind.done[activeId]?.includes(habit.id)
+      // A weekly habit is ticked for the week, so un-ticking has to delete the
+      // row on whichever day it was actually made.
+      const checkedDay =
+        habit.kind === 'weekly'
+          ? (view.grind.weekDone?.[activeId]?.[habit.id] ?? null)
+          : view.grind.done[activeId]?.includes(habit.id)
+            ? today
+            : null
 
       // Unchecking claws points back out of the shared bank, so it has to cover them.
-      if (checkedToday && view.balance < habit.points) return
+      if (checkedDay && view.balance < habit.points) return
 
       enqueue(
-        checkedToday
+        checkedDay
           ? {
               type: 'check.remove',
               match: {
                 household_id: householdId,
                 member_id: activeId,
                 habit_id: habit.id,
-                day: today,
+                day: checkedDay,
               },
             }
           : {
@@ -830,6 +923,178 @@ export function useCloudGame() {
     [householdId, fetchRows]
   )
 
+  // The agreed multiplier for the week. A members update, like picking who you
+  // are is - rare enough not to be worth queueing, and the week is scored on
+  // the server from this column anyway.
+  const setHandicap = useCallback(
+    async (memberId, value) => {
+      if (!householdId) return
+      if (isOffline()) {
+        setError('Changing the handicap needs a connection.')
+        return
+      }
+      const { error: updateError } = await supabase
+        .from('members')
+        .update({ handicap: value })
+        .eq('id', memberId)
+        .eq('household_id', householdId)
+      if (updateError) setError(updateError.message)
+      fetchRows(householdId)
+    },
+    [householdId, fetchRows]
+  )
+
+  // Pinning something to save for. `households` is read-only by policy - the
+  // seed balance lives there - so this goes through a function.
+  const setWish = useCallback(
+    async (rewardId) => {
+      if (!householdId) return
+      if (isOffline()) {
+        setError('Pinning a reward needs a connection.')
+        return
+      }
+      const { error: rpcError } = await supabase.rpc('set_wish', {
+        p_household: householdId,
+        p_reward_id: rewardId,
+      })
+      if (rpcError) setError(rpcError.message)
+      fetchRows(householdId)
+    },
+    [householdId, fetchRows]
+  )
+
+  /**
+   * Everything a recap needs for one past week.
+   *
+   * The board only reads the last few weeks of check rows, so a Sunday further
+   * back than that has no chart and no reel to show. Opening one asks for its
+   * week directly rather than widening the window for every launch.
+   */
+  const loadWeek = useCallback(
+    async (start) => {
+      if (!householdId || isOffline()) return null
+      const days = weekDays(start)
+      const end = days[days.length - 1]
+
+      const [checks, stampRows] = await Promise.all([
+        supabase
+          .from('habit_checks')
+          .select('*')
+          .eq('household_id', householdId)
+          .gte('day', start)
+          .lte('day', end),
+        supabase.from('cosigns').select('*').eq('household_id', householdId),
+      ])
+      if (checks.error) return null
+
+      const rows = checks.data ?? []
+      const byDay = new Map()
+      const byMemberDay = new Map()
+      for (const check of rows) {
+        const day = byDay.get(check.day) ?? {}
+        day[check.member_id] = (day[check.member_id] ?? 0) + check.points
+        byDay.set(check.day, day)
+
+        const key = `${check.member_id}|${check.day}`
+        byMemberDay.set(key, (byMemberDay.get(key) ?? 0) + 1)
+      }
+
+      const goalDates = {}
+      for (const [key, count] of byMemberDay) {
+        const [memberId, day] = key.split('|')
+        if (count >= STREAK_MIN_CHECKS) {
+          goalDates[memberId] = [...(goalDates[memberId] ?? []), day]
+        }
+      }
+
+      const dayOf = new Map(rows.map((c) => [c.id, c.day]))
+
+      return {
+        history: days.map((day) => ({ day, totals: byDay.get(day) ?? {} })),
+        goalDates,
+        proofs: rows
+          .filter((c) => c.proof_path)
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+          .map((c) => ({
+            id: c.id,
+            memberId: c.member_id,
+            day: c.day,
+            label: c.title,
+            path: c.proof_path,
+            w: c.proof_w,
+            h: c.proof_h,
+          })),
+        stamps: (stampRows.data ?? [])
+          .map((c) => ({ memberId: c.member_id, day: dayOf.get(c.check_id) }))
+          .filter((c) => c.day),
+      }
+    },
+    [householdId]
+  )
+
+  /**
+   * Lets old weeks give up most of their photos. The check rows keep their
+   * points and their place in the log; only the picture goes, and only for
+   * weeks well outside the window this backend reads - see data/proof.
+   *
+   * Those rows are older than `fetchRows` looks, so this asks for them
+   * directly rather than working from what is already loaded, and nothing on
+   * screen changes when it finishes.
+   */
+  const thinOldProofs = useCallback(async () => {
+    if (!householdId || isOffline()) return { removed: 0 }
+
+    const { data, error: readError } = await supabase
+      .from('habit_checks')
+      .select('id, day, proof_path, created_at')
+      .eq('household_id', householdId)
+      .lt('day', thinBefore(today))
+      .not('proof_path', 'is', null)
+    if (readError || !data?.length) return { removed: 0 }
+
+    const doomed = thinnable(
+      data.map((row) => ({ ...row, at: new Date(row.created_at).getTime() })),
+      today
+    )
+    if (doomed.length === 0) return { removed: 0 }
+
+    // In batches, because the first pass on a board that has been going a
+    // while can find hundreds at once, and an `in` list that long is a URL
+    // nobody accepts. A batch that fails just leaves its photos for next time.
+    let removed = 0
+    for (let from = 0; from < doomed.length; from += THIN_BATCH) {
+      const batch = doomed.slice(from, from + THIN_BATCH)
+      const paths = batch.map((shot) => shot.proof_path)
+
+      // Storage first: a row still pointing at a deleted object shows a broken
+      // photo, but an object with no row pointing at it is just a byte nobody
+      // asks for, and the next pass will not see it again either way.
+      const { error: removeError } = await supabase.storage.from(PROOF_BUCKET).remove(paths)
+      if (removeError) break
+      paths.forEach((path) => signed.delete(path))
+
+      const { error: clearError } = await supabase
+        .from('habit_checks')
+        .update({ proof_path: null, proof_w: null, proof_h: null })
+        .in('id', batch.map((shot) => shot.id))
+      if (clearError) break
+
+      removed += batch.length
+    }
+
+    return { removed }
+  }, [householdId, today])
+
+  // Once a session, after the board is up. Both phones may run it; the second
+  // one simply finds nothing left to thin.
+  const thinnedThisSession = useRef(false)
+
+  useEffect(() => {
+    if (!householdId || !ready || isOffline() || thinnedThisSession.current) return
+    thinnedThisSession.current = true
+    thinOldProofs()
+  }, [householdId, ready, thinOldProofs])
+
   const redeem = useCallback(
     async (reward) => {
       if (!householdId) return
@@ -853,6 +1118,30 @@ export function useCloudGame() {
       fetchRows(householdId)
     },
     [householdId, activeId, fetchRows, track]
+  )
+
+  /**
+   * Closes the finished season and opens the next one. Server-checked like
+   * claiming is, and idempotent there, so both phones pressing it at once
+   * rolls over exactly once.
+   */
+  const endSeason = useCallback(
+    async (required) => {
+      if (!householdId) return
+      if (isOffline()) {
+        setError('Rolling over needs a connection - the season is closed on the server.')
+        return
+      }
+      await track(async () => {
+        const { error: rpcError } = await supabase.rpc('end_season', {
+          p_household: householdId,
+          p_required: required,
+        })
+        if (rpcError) throw rpcError
+      })
+      fetchRows(householdId)
+    },
+    [householdId, fetchRows, track]
   )
 
   const claimTier = useCallback(
@@ -1053,7 +1342,9 @@ export function useCloudGame() {
     }
 
     const results = await Promise.all(
-      ['habit_checks', 'redemptions', 'tier_claims', 'weeks', 'cosigns'].map(wipe)
+      ['habit_checks', 'redemptions', 'tier_claims', 'weeks', 'cosigns', 'seasons'].map(
+        wipe
+      )
     )
 
     const names = {
@@ -1062,6 +1353,7 @@ export function useCloudGame() {
       tier_claims: 'tier claims',
       weeks: 'weeks',
       cosigns: 'stamps',
+      seasons: 'seasons',
     }
     asked.current.clear()
     const cleared = results.filter(Boolean).map((t) => names[t])
@@ -1083,7 +1375,7 @@ export function useCloudGame() {
         p_household: householdId,
         p_start: start,
         p_today: today,
-        p_min_target: minTargetFor(view.dailyGoal),
+        p_week_target: weekTargetFor(view.dailyGoal, view.weeklyGoal),
       })
       if (rpcError) setError(rpcError.message)
       fetchRows(householdId)
@@ -1128,6 +1420,10 @@ export function useCloudGame() {
     uncosign,
     openWeek,
     markRecapOpened,
+    endSeason,
+    setHandicap,
+    setWish,
+    loadWeek,
     status: queue.length > 0 && status !== 'error' ? (isOffline() ? 'offline' : 'saving') : status,
     pending: queue.length,
     notice,
@@ -1139,6 +1435,10 @@ export function useCloudGame() {
       clearPoints: devClearPoints,
       seedHistory: devSeedHistory,
       settleWeek: devSettleWeek,
+      // A single point is enough for the server: the twelve-tier gate is the
+      // client's, and this is the tool for not waiting on it.
+      endSeason: () => endSeason(1),
+      thinProofs: thinOldProofs,
       forget: devForget,
       refresh: () => fetchRows(householdId),
     },

@@ -16,7 +16,8 @@ import PurchaseOverlay from './components/PurchaseOverlay'
 import Toast from './components/Toast'
 import Celebrate from './components/Celebrate'
 import Recap from './components/Recap'
-import { streakFrom } from './lib/day'
+import { SEASON_XP_TOTAL, seasonName } from './data/season'
+import { streakFrom } from './data/streak'
 import { successFeedback, tapFeedback } from './lib/haptics'
 
 // Streak lengths worth a moment, highest first.
@@ -31,6 +32,8 @@ export default function App() {
   const [checkingOut, setCheckingOut] = useState(false)
   const [purchase, setPurchase] = useState(null)
   const [party, setParty] = useState(null)
+  // Your own last check-off, which outranks a partner notice while it is up.
+  const [flash, setFlash] = useState(null)
   // Held by week, not as a snapshot of it: opening one marks it opened, and
   // the card only flips if the component is reading the row that just changed.
   const [recapWeek, setRecapWeek] = useState(null)
@@ -111,6 +114,36 @@ export default function App() {
 
   const recap = (game.weeks ?? []).find((w) => w.start_day === recapWeek) ?? null
 
+  // What the bank is being saved toward, if anything still in the catalog.
+  const wishReward = game.wish
+    ? (game.rewards ?? []).find((r) => r.id === game.wish)
+    : null
+  const wish = wishReward
+    ? {
+        title: wishReward.title,
+        ready: game.balance >= wishReward.cost,
+        progress: Math.min(
+          100,
+          Math.round((game.balance / Math.max(1, wishReward.cost)) * 100)
+        ),
+      }
+    : null
+
+  // A mis-tap is the easiest mistake to make here, so the check-off you just
+  // made offers its own way back out. Undoing is the same toggle again.
+  const check = (habit) => {
+    tapFeedback()
+    const undoing = game.grind?.done?.[game.activeId]?.includes(habit.id)
+    game.toggleHabit(habit)
+    if (undoing) return
+    setFlash({
+      id: `undo-${habit.id}-${Date.now()}`,
+      title: habit.title,
+      text: `+${habit.points} banked`,
+      action: { label: 'Undo', run: () => game.toggleHabit(habit) },
+    })
+  }
+
   const checkout = async () => {
     const items = cart
       .map((line) => ({ ...game.rewards.find((r) => r.id === line.id), qty: line.qty }))
@@ -174,6 +207,8 @@ export default function App() {
       <div className="app">
         <Header
           balance={game.balance}
+          wish={wish}
+          season={game.season}
           tab={tab}
           onTab={setTab}
           redeemedCount={game.redeemed.filter((r) => !r.usedAt).length}
@@ -205,16 +240,15 @@ export default function App() {
                 balance={game.balance}
                 log={game.log}
                 dailyHabits={game.dailyHabits}
+                weeklyHabits={game.weeklyHabits}
                 bonusHabits={game.bonusHabits}
                 dailyGoal={game.dailyGoal}
                 week={game.week}
                 stakes={game.stakes}
                 proofUrl={game.proofUrl}
-                onToggleHabit={(habit) => {
-                  tapFeedback()
-                  game.toggleHabit(habit)
-                }}
+                onToggleHabit={check}
                 onOpenWeek={game.openWeek}
+                onHandicap={game.setHandicap}
                 onAddStake={(payload) => game.addCatalogItem('stake', payload)}
                 onAttachProof={game.attachProof}
                 onClearProof={game.clearProof}
@@ -235,11 +269,24 @@ export default function App() {
             {tab === 'season' && (
               <SeasonPass
                 season={game.season}
+                pastSeasons={game.pastSeasons ?? []}
                 history={game.history}
                 members={game.members}
                 grind={game.grind}
                 weeks={game.weeks ?? []}
                 onOpenRecap={(week) => setRecapWeek(week.start_day)}
+                onEndSeason={async () => {
+                  const finished = game.season.n ?? 1
+                  await game.endSeason(SEASON_XP_TOTAL)
+                  successFeedback()
+                  setParty({
+                    id: `season-${finished}`,
+                    icon: 'trophy',
+                    eyebrow: `${seasonName(finished)} complete`,
+                    title: `${seasonName(finished + 1)} starts now`,
+                    note: 'Track back to zero. The bank, the coupons and every Sunday stay.',
+                  })
+                }}
                 onClaimTier={(tier) => {
                   successFeedback()
                   game.claimTier(tier)
@@ -263,6 +310,8 @@ export default function App() {
                 onCheckout={checkout}
                 checkingOut={checkingOut}
                 offline={game.status === 'offline'}
+                wish={game.wish}
+                onWish={game.setWish}
                 onAddReward={(payload) => game.addCatalogItem('reward', payload)}
                 onEditReward={(id, payload) =>
                   game.editCatalogItem('reward', id, payload)
@@ -298,6 +347,7 @@ export default function App() {
             proofs={game.proofs ?? []}
             stamps={game.stamps ?? []}
             proofUrl={game.proofUrl}
+            loadWeek={game.loadWeek}
             onOpened={game.markRecapOpened}
             onClose={() => {
               shownRecaps.current.add(`${game.activeId}|${recap.start_day}`)
@@ -306,8 +356,10 @@ export default function App() {
           />
         )}
 
-        {game.notice && (
-          <Toast notice={game.notice} onDone={game.dismissNotice} />
+        {flash ? (
+          <Toast notice={flash} onDone={() => setFlash(null)} />
+        ) : (
+          game.notice && <Toast notice={game.notice} onDone={game.dismissNotice} />
         )}
 
         {dev.on && <DevPanel game={game} onClose={dev.disable} />}

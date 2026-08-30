@@ -1,6 +1,10 @@
 // Mock habit catalog. Swap for real data source later.
-// `daily` habits reset every night and drive the streak; `bonus` habits are
-// the occasional big-ticket efforts worth grinding for.
+//
+// Three lists, by how often a thing comes round:
+//   daily  - resets every night
+//   weekly - one tick per calendar week, whichever day you do it
+//   bonus  - the occasional big-ticket effort, no reset at all
+//
 // `hue` feeds the same flat art plate the reward cards use.
 export const HABITS = [
   {
@@ -76,6 +80,33 @@ export const HABITS = [
     hue: 318,
   },
   {
+    id: 'big-shop',
+    title: 'Big Shop, Cook Ahead',
+    note: 'One proper shop, and something cooked for later in the week.',
+    points: 90,
+    kind: 'weekly',
+    icon: 'basket',
+    hue: 96,
+  },
+  {
+    id: 'life-admin',
+    title: 'An Hour of Life Admin',
+    note: 'Bills, forms, the email you have been avoiding. One hour.',
+    points: 70,
+    kind: 'weekly',
+    icon: 'receipt',
+    hue: 200,
+  },
+  {
+    id: 'see-people',
+    title: 'See People, In Person',
+    note: 'Anyone who is not each other. Screens do not count.',
+    points: 85,
+    kind: 'weekly',
+    icon: 'ticket',
+    hue: 320,
+  },
+  {
     id: 'hike',
     title: 'Go on a Real Hike',
     note: 'Trailhead, boots, at least a couple of hours.',
@@ -105,7 +136,10 @@ export const HABITS = [
 ]
 
 export const DAILY_HABITS = HABITS.filter((h) => h.kind === 'daily')
+export const WEEKLY_HABITS = HABITS.filter((h) => h.kind === 'weekly')
 export const BONUS_HABITS = HABITS.filter((h) => h.kind === 'bonus')
 
-// Clearing every daily habit is what keeps a streak alive.
+// What a full daily list is worth. It sets the pace of a week rather than the
+// bar for a day - see data/week.
 export const DAILY_GOAL = DAILY_HABITS.reduce((sum, h) => sum + h.points, 0)
+

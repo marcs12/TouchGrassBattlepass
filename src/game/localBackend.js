@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   bonusHabitsFrom,
   dailyHabitsFrom,
@@ -6,12 +6,15 @@ import {
   rewardsFrom,
   slugify,
   stakesFrom,
+  weeklyHabitsFrom,
 } from '../data/catalog'
+import { STREAK_MIN_CHECKS } from '../data/streak'
 import { recentDays, shiftDay, today } from '../lib/day'
 import { loadState, saveState } from '../lib/storage'
-import { minTargetFor, recapReady, scoreWeek, weekStart } from '../data/week'
+import { recapReady, scoreWeek, weekDays, weekStart } from '../data/week'
 import { getProof, putProof, removeProof } from '../lib/proofStore'
 import { prepare } from '../lib/photo'
+import { thinnable } from '../data/proof'
 
 // Device-only mode. Used when no Supabase credentials are configured, and as
 // the shape both backends present to the UI.
@@ -39,8 +42,13 @@ const freshState = () => ({
   balance: STARTING_BALANCE,
   earned: {},
   redeemed: [],
-  grind: { date: today(), done: {}, goalDates: {} },
-  season: { xp: 0, claimed: [] },
+  // `done` is today's ticks; `weekDone` is the weekly list's, keyed by the day
+  // each was actually made, because un-ticking one has to take back the points
+  // from that day rather than from today.
+  grind: { date: today(), done: {}, weekDone: {}, goalDates: {} },
+  // The track resets with each season; the bank and the coupons don't.
+  season: { n: 1, xp: 0, claimed: [] },
+  pastSeasons: [],
   log: [],
   // Habits and rewards added in the app, plus hidden built-ins.
   catalog: [],
@@ -54,6 +62,8 @@ const freshState = () => ({
   weeks: [],
   cosigns: [],
   proofs: {},
+  // The reward you are both saving toward, by id. Null means nothing pinned.
+  wish: null,
 })
 
 const normalize = (state) => {
@@ -68,6 +78,7 @@ const normalize = (state) => {
     weeks: state.weeks ?? [],
     cosigns: state.cosigns ?? [],
     proofs: state.proofs ?? {},
+    pastSeasons: state.pastSeasons ?? [],
     grind: { ...base.grind, ...state.grind },
     season: { ...base.season, ...state.season },
   }
@@ -102,10 +113,12 @@ const settleInto = (state, start) => {
   if (!played) return state
 
   const dailyGoal = dailyHabitsFrom(state.catalog).reduce((sum, h) => sum + h.points, 0)
+  const weeklyGoal = weeklyHabitsFrom(state.catalog).reduce((sum, h) => sum + h.points, 0)
   const result = scoreWeek({
     history,
     members,
     dailyGoal,
+    weeklyGoal,
     start,
     today: state.grind.date,
   })
@@ -154,10 +167,20 @@ const settleInto = (state, start) => {
   }
 }
 
-const rollOver = (state, day = today()) =>
-  state.grind.date === day
-    ? state
-    : { ...state, grind: { ...state.grind, date: day, done: {} } }
+const rollOver = (state, day = today()) => {
+  if (state.grind.date === day) return state
+
+  // Weekly ticks survive the night but not the week.
+  const from = weekStart(day)
+  const weekDone = Object.fromEntries(
+    Object.entries(state.grind.weekDone ?? {}).map(([who, ticks]) => [
+      who,
+      Object.fromEntries(Object.entries(ticks).filter(([, when]) => when >= from)),
+    ])
+  )
+
+  return { ...state, grind: { ...state.grind, date: day, done: {}, weekDone } }
+}
 
 export function useLocalGame() {
   const [state, setState] = useState(() =>
@@ -180,7 +203,12 @@ export function useLocalGame() {
 
   const start = useCallback((names) => {
     setState((prev) => {
-      const roster = names.map((name, i) => ({ id: `p${i + 1}`, name, slot: i + 1 }))
+      const roster = names.map((name, i) => ({
+        id: `p${i + 1}`,
+        name,
+        slot: i + 1,
+        handicap: 1,
+      }))
       const first = roster[0].id
       return {
         ...prev,
@@ -190,6 +218,7 @@ export function useLocalGame() {
         grind: {
           ...prev.grind,
           done: { [first]: prev.grind.done.legacy ?? [] },
+          weekDone: {},
           goalDates: { [first]: prev.grind.goalDates.legacy ?? [] },
         },
       }
@@ -222,25 +251,47 @@ export function useLocalGame() {
   const toggleHabit = useCallback((habit) => {
     setState((prev) => {
       const who = prev.activeId
+      const weekly = habit.kind === 'weekly'
       const done = new Set(prev.grind.done[who] ?? [])
-      const undoing = done.has(habit.id)
+      const ticks = { ...(prev.grind.weekDone?.[who] ?? {}) }
+
+      // A weekly habit is ticked for the week, not the day, so what decides
+      // whether this is an undo - and which day's points move - is the day it
+      // was ticked on.
+      const checkedDay = weekly
+        ? (ticks[habit.id] ?? null)
+        : done.has(habit.id)
+          ? prev.grind.date
+          : null
+      const undoing = Boolean(checkedDay)
 
       if (undoing && prev.balance < habit.points) return prev
 
-      if (undoing) done.delete(habit.id)
-      else done.add(habit.id)
+      if (undoing) {
+        done.delete(habit.id)
+        if (weekly) delete ticks[habit.id]
+      } else {
+        done.add(habit.id)
+        // Only the weekly list keeps a tick past tonight; `done` is enough for
+        // everything else, and a stale entry here would make a habit later
+        // moved to the weekly list read as already done.
+        if (weekly) ticks[habit.id] = prev.grind.date
+      }
 
+      // Today's standing only. Undoing a weekly ticked earlier in the week
+      // takes its points off that day, but this device keeps no record of what
+      // else was checked then, so that day's streak mark is left alone.
       const goalDates = new Set(prev.grind.goalDates[who] ?? [])
-      if (dailyHabitsFrom(prev.catalog).every((h) => done.has(h.id)))
-        goalDates.add(prev.grind.date)
+      if (done.size >= STREAK_MIN_CHECKS) goalDates.add(prev.grind.date)
       else goalDates.delete(prev.grind.date)
 
+      const day = undoing ? checkedDay : prev.grind.date
       const delta = undoing ? -habit.points : habit.points
       const entry = {
         id: `${habit.id}-${who}-${Date.now()}`,
         memberId: who,
         habitId: habit.id,
-        day: prev.grind.date,
+        day,
         label: undoing ? `${habit.title} (undone)` : habit.title,
         points: delta,
         at: Date.now(),
@@ -248,7 +299,7 @@ export function useLocalGame() {
 
       return {
         ...prev,
-        history: addToHistory(prev.history, prev.grind.date, who, delta),
+        history: addToHistory(prev.history, day, who, delta),
         log: [entry, ...prev.log].slice(0, LOG_LIMIT),
         balance: prev.balance + delta,
         earned: {
@@ -258,6 +309,7 @@ export function useLocalGame() {
         grind: {
           ...prev.grind,
           done: { ...prev.grind.done, [who]: [...done] },
+          weekDone: { ...prev.grind.weekDone, [who]: ticks },
           goalDates: { ...prev.grind.goalDates, [who]: [...goalDates] },
         },
         season: { ...prev.season, xp: Math.max(0, prev.season.xp + delta) },
@@ -459,6 +511,102 @@ export function useLocalGame() {
     }))
   }, [])
 
+  // The agreed multiplier for the week - see data/week.
+  const setHandicap = useCallback((memberId, value) => {
+    setState((prev) => ({
+      ...prev,
+      members: (prev.members ?? []).map((m) =>
+        m.id === memberId ? { ...m, handicap: value } : m
+      ),
+    }))
+  }, [])
+
+  const setWish = useCallback((rewardId) => {
+    setState((prev) => ({ ...prev, wish: rewardId || null }))
+  }, [])
+
+  /**
+   * Everything a recap needs for one past week. The synced backend has to go
+   * and fetch this; on a device-only board it is all already here, and this
+   * exists so the recap can ask the same question of either one.
+   */
+  const loadWeek = useCallback(
+    async (start) => {
+      const days = weekDays(start)
+      const end = days[days.length - 1]
+      return {
+        history: days.map((day) => ({ day, totals: state.history[day] ?? {} })),
+        goalDates: state.grind.goalDates,
+        proofs: Object.values(state.proofs)
+          .filter((p) => p.day >= start && p.day <= end)
+          .sort((a, b) => (a.day < b.day ? 1 : -1)),
+        stamps: state.cosigns
+          .map((c) => ({
+            memberId: c.member_id,
+            day: state.log.find((e) => e.id === c.check_id)?.day,
+          }))
+          .filter((c) => c.day),
+      }
+    },
+    [state.history, state.proofs, state.cosigns, state.log, state.grind.goalDates]
+  )
+
+  /**
+   * Closes the finished season and opens the next one. Mirrors `end_season` on
+   * the server: the season's XP is frozen onto the shelf, the track resets, and
+   * the bank, the coupons, the streaks and the photos all carry over.
+   */
+  const endSeason = useCallback((required) => {
+    setState((prev) => {
+      if (prev.season.xp < Math.max(1, required ?? 1)) return prev
+      return {
+        ...prev,
+        pastSeasons: [
+          { n: prev.season.n, xp: prev.season.xp, endedAt: new Date().toISOString() },
+          ...prev.pastSeasons,
+        ],
+        season: { n: prev.season.n + 1, xp: 0, claimed: [] },
+      }
+    })
+  }, [])
+
+  /**
+   * Lets old weeks give up most of their photos - see data/proof. On a
+   * device-only board the blobs are all there is, and IndexedDB has a quota
+   * like any bucket does.
+   */
+  const thinOldProofs = useCallback(async () => {
+    const doomed = thinnable(Object.values(state.proofs), state.grind.date)
+    if (doomed.length === 0) return { removed: 0 }
+
+    const gone = new Set(doomed.map((shot) => shot.path))
+    for (const path of gone) {
+      removeProof(path)
+      const url = urls.get(path)
+      if (url) {
+        URL.revokeObjectURL(url)
+        urls.delete(path)
+      }
+    }
+
+    setState((prev) => ({
+      ...prev,
+      proofs: Object.fromEntries(
+        Object.entries(prev.proofs).filter(([key]) => !gone.has(key))
+      ),
+    }))
+    return { removed: gone.size }
+  }, [state.proofs, state.grind.date])
+
+  // Once a session, the same as the synced backend.
+  const thinnedThisSession = useRef(false)
+
+  useEffect(() => {
+    if (!state.members || thinnedThisSession.current) return
+    thinnedThisSession.current = true
+    thinOldProofs()
+  }, [state.members, thinOldProofs])
+
   // Weeks settle on open, and catch up on any that were missed.
   useEffect(() => {
     setState((prev) => {
@@ -512,7 +660,7 @@ export function useLocalGame() {
       const points = missing.reduce((sum, h) => sum + h.points, 0)
       missing.forEach((h) => done.add(h.id))
       const goalDates = new Set(prev.grind.goalDates[who] ?? [])
-      goalDates.add(prev.grind.date)
+      if (done.size >= STREAK_MIN_CHECKS) goalDates.add(prev.grind.date)
 
       return {
         ...prev,
@@ -535,6 +683,7 @@ export function useLocalGame() {
       const done = prev.grind.done[who] ?? []
       const all = [
         ...dailyHabitsFrom(prev.catalog),
+        ...weeklyHabitsFrom(prev.catalog),
         ...bonusHabitsFrom(prev.catalog),
       ]
       const points = done.reduce(
@@ -543,6 +692,14 @@ export function useLocalGame() {
       )
       const goalDates = new Set(prev.grind.goalDates[who] ?? [])
       goalDates.delete(prev.grind.date)
+
+      // Weekly ticks made today go with them; earlier ones in the same week
+      // belong to a day this isn't clearing.
+      const ticks = Object.fromEntries(
+        Object.entries(prev.grind.weekDone?.[who] ?? {}).filter(
+          ([, when]) => when !== prev.grind.date
+        )
+      )
 
       return {
         ...prev,
@@ -553,6 +710,7 @@ export function useLocalGame() {
         grind: {
           ...prev.grind,
           done: { ...prev.grind.done, [who]: [] },
+          weekDone: { ...prev.grind.weekDone, [who]: ticks },
           goalDates: { ...prev.grind.goalDates, [who]: [...goalDates] },
         },
       }
@@ -583,12 +741,16 @@ export function useLocalGame() {
       earned: Object.fromEntries(prev.members.map((m) => [m.id, 0])),
       redeemed: [],
       log: [],
-      grind: { ...prev.grind, done: {}, goalDates: {} },
-      season: { xp: 0, claimed: [] },
+      grind: { ...prev.grind, done: {}, weekDone: {}, goalDates: {} },
+      season: { n: 1, xp: 0, claimed: [] },
+      pastSeasons: [],
       weeks: [],
       cosigns: [],
     }))
-    return { cleared: ['points', 'receipts', 'tier claims', 'weeks', 'stamps'], kept: [] }
+    return {
+      cleared: ['points', 'receipts', 'tier claims', 'weeks', 'stamps', 'seasons'],
+      kept: [],
+    }
   }, [])
 
   const devSettleWeek = useCallback((start) => {
@@ -610,9 +772,11 @@ export function useLocalGame() {
   }))
 
   const dailyHabits = dailyHabitsFrom(state.catalog)
+  const weeklyHabits = weeklyHabitsFrom(state.catalog)
   const bonusHabits = bonusHabitsFrom(state.catalog)
   const rewards = rewardsFrom(state.catalog)
   const dailyGoal = dailyHabits.reduce((sum, h) => sum + h.points, 0)
+  const weeklyGoal = weeklyHabits.reduce((sum, h) => sum + h.points, 0)
 
   // The log carries its photo and its stamps, so one pass over it feeds both
   // the contribution list and the recap.
@@ -641,6 +805,7 @@ export function useLocalGame() {
       history,
       members: state.members ?? [],
       dailyGoal,
+      weeklyGoal,
       start: weekStart(state.grind.date),
       today: state.grind.date,
     }),
@@ -651,8 +816,10 @@ export function useLocalGame() {
     mode: 'local',
     ready: true,
     dailyHabits,
+    weeklyHabits,
     bonusHabits,
     dailyGoal,
+    weeklyGoal,
     rewards,
     stakes: stakesFrom(state.catalog),
     error: null,
@@ -689,6 +856,10 @@ export function useLocalGame() {
     uncosign,
     openWeek,
     markRecapOpened,
+    endSeason,
+    setHandicap,
+    setWish,
+    loadWeek,
     // Device-only mode has no partner to hear from and nothing to sync.
     status: 'local',
     notice: null,
@@ -700,6 +871,8 @@ export function useLocalGame() {
       clearPoints: devClearPoints,
       seedHistory: devSeedHistory,
       settleWeek: devSettleWeek,
+      endSeason: () => endSeason(1),
+      thinProofs: thinOldProofs,
       forget: devForget,
       refresh: null,
     },

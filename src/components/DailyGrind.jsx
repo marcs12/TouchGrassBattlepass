@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { streakFrom } from '../lib/day'
+import { STREAK_MIN_CHECKS, skippedDays, streakInfo } from '../data/streak'
 import { weekDays, weekStart } from '../data/week'
 import Icon from './Icon'
 import ItemForm from './ItemForm'
@@ -14,7 +14,7 @@ import Window from './Window'
 // S M T W T F S and lines up with the week banner above it.
 const WEEKDAY = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
-function HabitRow({ habit, done, blocked, editing, proof, onToggle, onEdit, onRemove, onProof }) {
+function HabitRow({ habit, done, blocked, hint, editing, proof, onToggle, onEdit, onRemove, onProof }) {
   return (
     <li>
       <button
@@ -42,6 +42,9 @@ function HabitRow({ habit, done, blocked, editing, proof, onToggle, onEdit, onRe
         <span className="habit__meta">
           <strong>{habit.title}</strong>
           <span className="habit__note">{habit.note}</span>
+          {/* Weekly habits need to say where they are in the week: unticked on
+              Monday and unticked on Saturday are not the same situation. */}
+          {hint && <span className="habit__hint label">{hint}</span>}
         </span>
 
         <span className="habit__points">
@@ -111,6 +114,7 @@ export default function DailyGrind({
   balance,
   log,
   dailyHabits,
+  weeklyHabits = [],
   bonusHabits,
   dailyGoal,
   week,
@@ -122,6 +126,7 @@ export default function DailyGrind({
   onRemoveHabit,
   onOpenWeek,
   onAddStake,
+  onHandicap,
   onAttachProof,
   onClearProof,
   onCosign,
@@ -136,10 +141,24 @@ export default function DailyGrind({
   const done = new Set(grind.done[active.id] ?? [])
   const partnerDone = new Set((partner && grind.done[partner.id]) ?? [])
 
-  const today = bankedToday(members, grind.done, [...dailyHabits, ...bonusHabits])
+  // Weekly habits carry a tick for the whole week, keyed by the day it was
+  // made, so a Tuesday shop still reads as done on Friday.
+  const weekTicks = grind.weekDone?.[active.id] ?? {}
+  const isDone = (habit) =>
+    habit.kind === 'weekly' ? Boolean(weekTicks[habit.id]) : done.has(habit.id)
+  const dayOf = (habit) =>
+    habit.kind === 'weekly' ? (weekTicks[habit.id] ?? grind.date) : grind.date
+
+  const today = bankedToday(members, grind.done, [
+    ...dailyHabits,
+    ...weeklyHabits,
+    ...bonusHabits,
+  ])
   const banked = today[active.id] ?? 0
 
   const dailyDone = dailyHabits.filter((h) => done.has(h.id)).length
+  // Anything ticked today, of any list - that is what the streak counts.
+  const checkedToday = done.size
   const dailyEarned = dailyHabits.filter((h) => done.has(h.id)).reduce(
     (sum, h) => sum + h.points,
     0
@@ -149,28 +168,49 @@ export default function DailyGrind({
     : 0
 
   const goalDates = grind.goalDates[active.id] ?? []
-  const streak = streakFrom(goalDates, grind.date)
+  const run = streakInfo(goalDates, grind.date)
+  const streak = run.length
   const hit = new Set(goalDates)
+  const forgiven = skippedDays(goalDates, grind.date, run.from)
+
+  // Weekly habits carry their own clock: how long is left to bank one, and
+  // which day it was banked on.
+  const daysLeft = week?.daysLeft ?? 0
+  const weeklyHint = (habit) => {
+    if (habit.kind !== 'weekly') return null
+    const when = weekTicks[habit.id]
+    if (when) {
+      return when === grind.date
+        ? 'banked today'
+        : `banked ${new Date(`${when}T00:00:00`).toLocaleDateString(undefined, {
+            weekday: 'long',
+          })}`
+    }
+    if (daysLeft <= 0) return 'last chance — the week is scoring'
+    return `${daysLeft} day${daysLeft === 1 ? '' : 's'} left this week`
+  }
 
   // Unchecking refunds points, which the shared bank has to be able to cover.
-  const canUndo = (habit) => !done.has(habit.id) || balance >= habit.points
+  const canUndo = (habit) => !isDone(habit) || balance >= habit.points
 
-  // Today's photos come straight off the log, which already carries them.
-  const proofFor = (habitId) =>
+  // Photos come straight off the log, which already carries them - on the day
+  // the check-off was actually made, which for a weekly one may not be today.
+  const proofFor = (habitId, day = grind.date) =>
     log.find(
       (entry) =>
         entry.habitId === habitId &&
-        entry.day === grind.date &&
+        entry.day === day &&
         entry.memberId === active.id &&
         entry.proof
     )?.proof ?? null
 
   const rowProps = (habit) => ({
     habit,
-    done: done.has(habit.id),
+    done: isDone(habit),
     blocked: !canUndo(habit),
+    hint: weeklyHint(habit),
     editing,
-    proof: proofFor(habit.id),
+    proof: proofFor(habit.id, dayOf(habit)),
     onToggle: onToggleHabit,
     onEdit: setDraft,
     onRemove: onRemoveHabit,
@@ -223,8 +263,8 @@ export default function DailyGrind({
       {balance === 0 && banked === 0 && streak === 0 && (
         <p className="bubble">
           <Icon name="spark" size={16} strokeWidth="1.9" />
-          Tick anything below to open the store. Clearing the whole daily list
-          starts your streak.
+          Tick anything below to open the store. {STREAK_MIN_CHECKS} check-offs
+          in a day starts your streak.
         </p>
       )}
 
@@ -237,6 +277,7 @@ export default function DailyGrind({
             stakes={stakes}
             onOpenWeek={onOpenWeek}
             onAddStake={onAddStake}
+            onHandicap={onHandicap}
           />
         </Pane>
       )}
@@ -261,13 +302,19 @@ export default function DailyGrind({
           {/* The rule used to live only in the first-run hint, which vanishes
               as soon as you bank a point - so a day that never lit up looked
               like a bug rather than an unfinished list. */}
-          {dailyHabits.length > 0 && (
-            <span className="streak__rule label">
-              {dailyDone === dailyHabits.length
-                ? 'full list cleared today'
-                : `${dailyDone} of ${dailyHabits.length} today — clear them all to keep it`}
-            </span>
-          )}
+          <span className="streak__rule label">
+            {checkedToday >= STREAK_MIN_CHECKS
+              ? `${checkedToday} checked today — the day counts`
+              : `${checkedToday} of ${STREAK_MIN_CHECKS} today — any ${STREAK_MIN_CHECKS} keep it`}
+          </span>
+          {/* A streak that dies to one bad Tuesday stops being something you
+              protect, so a couple of misses a month are forgiven. Saying how
+              many are left is the whole value of having them. */}
+          <span className="streak__skips label">
+            {run.skipsLeft > 0
+              ? `${run.skipsLeft} skip${run.skipsLeft === 1 ? '' : 's'} left this month`
+              : 'no skips left this month'}
+          </span>
         </span>
         <ol className="streak__strip">
           {weekDays(weekStart(grind.date)).map((key) => {
@@ -276,24 +323,30 @@ export default function DailyGrind({
             // Days that haven't happened yet aren't misses, and shouldn't read
             // as one.
             const ahead = key > grind.date
+            const skipped = forgiven.has(key)
             return (
               <li
                 key={key}
                 className={`streak__day ${hit.has(key) ? 'streak__day--hit' : ''} ${
-                  isToday ? 'streak__day--today' : ''
-                } ${ahead ? 'streak__day--ahead' : ''}`}
+                  skipped ? 'streak__day--skip' : ''
+                } ${isToday ? 'streak__day--today' : ''} ${
+                  ahead ? 'streak__day--ahead' : ''
+                }`}
               >
                 <span className="streak__dot" aria-hidden="true">
                   {hit.has(key) && <Icon name="check" size={12} strokeWidth="2.6" />}
+                  {skipped && <i className="streak__skip" />}
                 </span>
                 <span className="streak__label">{weekday}</span>
                 <span className="sr-only">
                   {key}:{' '}
                   {hit.has(key)
-                    ? 'full list cleared'
-                    : ahead
-                    ? 'still to come'
-                    : 'not cleared'}
+                    ? 'day counted'
+                    : skipped
+                      ? 'missed, forgiven by a skip'
+                      : ahead
+                        ? 'still to come'
+                        : 'not counted'}
                 </span>
               </li>
             )
@@ -349,6 +402,18 @@ export default function DailyGrind({
         </section>
       </Pane>
 
+      {weeklyHabits.length > 0 && (
+        <Pane title="weekly.list — one tick per week" tone="b" flush>
+          <section className="habits">
+            <ul className="habits__list">
+              {weeklyHabits.map((habit) => (
+                <HabitRow key={habit.id} {...rowProps(habit)} />
+              ))}
+            </ul>
+          </section>
+        </Pane>
+      )}
+
       <ol className="pixrule" aria-hidden="true">
         <li className="pixheart" />
         <li className="pixheart" />
@@ -368,7 +433,7 @@ export default function DailyGrind({
       <Pane title="contributions" tone="a" flush>
         <ContributionLog
           log={log}
-          habits={[...dailyHabits, ...bonusHabits]}
+          habits={[...dailyHabits, ...weeklyHabits, ...bonusHabits]}
           members={members}
           activeId={active.id}
           proofUrl={proofUrl}
@@ -380,7 +445,7 @@ export default function DailyGrind({
       {shooting && (
         <ProofSheet
           habit={shooting}
-          proof={proofFor(shooting.id)}
+          proof={proofFor(shooting.id, dayOf(shooting))}
           proofUrl={proofUrl}
           onAttach={onAttachProof}
           onClear={onClearProof}

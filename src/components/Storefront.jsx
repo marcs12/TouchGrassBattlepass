@@ -28,6 +28,8 @@ export default function Storefront({
   onCheckout,
   checkingOut,
   offline,
+  wish,
+  onWish,
   onAddReward,
   onEditReward,
   onRemoveReward,
@@ -42,11 +44,18 @@ export default function Storefront({
     [rewards, balance]
   )
 
-  // Cheapest thing still out of reach - the thing worth grinding for.
+  // What the bank is being measured against. A pinned reward wins - you said
+  // that is the one - and otherwise it is the cheapest thing still out of
+  // reach, which is the thing worth grinding for by default.
+  const wished = useMemo(
+    () => rewards.find((r) => r.id === wish) ?? null,
+    [rewards, wish]
+  )
   const nextUp = useMemo(() => {
+    if (wished && wished.cost > balance) return wished
     const locked = rewards.filter((r) => r.cost > balance).sort(SORTS.cheapest)
     return locked[0] ?? null
-  }, [rewards, balance])
+  }, [rewards, balance, wished])
 
   const visible = useMemo(() => {
     const matches =
@@ -87,7 +96,9 @@ export default function Storefront({
         <div className="nextup">
           {nextUp ? (
             <>
-              <p className="label">Next unlock</p>
+              <p className="label">
+                {nextUp.id === wish ? 'Saving for' : 'Next unlock'}
+              </p>
               <p className="nextup__title">{nextUp.title}</p>
               <div
                 className="meter"
@@ -206,9 +217,11 @@ export default function Storefront({
               owned={ownedCount(reward.id)}
               inCart={inCart(reward.id)}
               editing={editing}
+              wished={reward.id === wish}
               onAdd={addToCart}
               onEdit={setDraft}
               onRemove={onRemoveReward}
+              onWish={onWish}
             />
           ))}
         </div>
