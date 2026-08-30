@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nothing here · Touch Grass Battlepass</title>
+    <link rel="icon" type="image/svg+xml" href="./icons/favicon.svg" />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#bdeccd" />
+    <!-- Standalone on purpose: this page is served for paths that never
+         reached the app, so it cannot rely on a hashed bundle existing. -->
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 16px;
+        min-height: 100svh;
+        margin: 0;
+        padding: 28px;
+        background: #fdf1f3;
+        background-image: linear-gradient(#f3d9e0 1px, transparent 1px),
+          linear-gradient(90deg, #f3d9e0 1px, transparent 1px);
+        background-size: 26px 26px;
+        color: #43303a;
+        font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+        text-align: center;
+      }
+      .card {
+        display: grid;
+        justify-items: center;
+        gap: 12px;
+        width: min(420px, 100%);
+        padding: 30px 26px;
+        border-radius: 18px;
+        border: 2.5px solid #43303a;
+        background: #fff7f8;
+        box-shadow: 6px 6px 0 #e2b9c6;
+      }
+      .art {
+        display: grid;
+        place-items: center;
+        width: 66px;
+        height: 66px;
+        border-radius: 50%;
+        border: 2.5px solid #43303a;
+        background: #bdeccd;
+      }
+      .code {
+        margin: 0;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #8a6a76;
+      }
+      h1 {
+        margin: 0;
+        font-size: 22px;
+        line-height: 1.25;
+      }
+      p.note {
+        margin: 0;
+        max-width: 34ch;
+        line-height: 1.6;
+        color: #6b515b;
+      }
+      a.btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 44px;
+        margin-top: 4px;
+        padding: 10px 18px;
+        border-radius: 12px;
+        border: 2.5px solid #43303a;
+        background: #f6b8c8;
+        color: #43303a;
+        font-weight: 800;
+        text-decoration: none;
+        box-shadow: 3px 3px 0 #e2b9c6;
+      }
+      a.btn:active {
+        transform: translate(3px, 3px);
+        box-shadow: 0 0 0 #e2b9c6;
+      }
+      a.btn:focus-visible {
+        outline: 2.5px solid #43303a;
+        outline-offset: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <span class="art" aria-hidden="true">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#43303a"
+             stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4.5 19.5C3 13 7 5.5 19.5 4.5c1 12.5-6.5 16.5-13 15Z" />
+          <path d="M9.5 14.5 19 5" />
+        </svg>
+      </span>
+      <p class="code">Error 404</p>
+      <h1>No such page</h1>
+      <p class="note">
+        This one is a single screen — the board, the store and the season all
+        live at the same address. Whatever you followed to get here has gone
+        stale.
+      </p>
+      <a class="btn" href="./">Back to the board</a>
+    </div>
+  </body>
+</html>

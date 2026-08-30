@@ -73,7 +73,7 @@ export default function RewardCard({
               aria-valuemax={100}
               aria-label={`Progress toward ${reward.title}`}
             >
-              <span style={{ width: `${progress}%` }} />
+              <span style={{ '--fill': `${progress}%` }} />
             </div>
             <span className="card__progress-text">
               {progress}% · {short.toLocaleString()} to go

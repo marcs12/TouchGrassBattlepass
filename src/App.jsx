@@ -16,6 +16,7 @@ import PurchaseOverlay from './components/PurchaseOverlay'
 import Toast from './components/Toast'
 import Celebrate from './components/Celebrate'
 import Recap from './components/Recap'
+import Loader from './components/Loader'
 import { SEASON_XP_TOTAL, seasonName } from './data/season'
 import { streakFrom } from './data/streak'
 import { successFeedback, tapFeedback } from './lib/haptics'
@@ -187,7 +188,7 @@ export default function App() {
   if (!game.ready) {
     return shell(
       <Window title="connecting">
-        <p className="empty">Finding your board…</p>
+        <Loader />
       </Window>
     )
   }

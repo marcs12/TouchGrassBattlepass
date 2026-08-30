@@ -1,0 +1,5 @@
+# A private board for two people. There is nothing here worth indexing, and
+# the app is a single screen behind an anonymous sign-in, so a sitemap would
+# have exactly one URL in it and no crawler would learn anything from it.
+User-agent: *
+Disallow: /

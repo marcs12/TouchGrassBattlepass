@@ -160,6 +160,24 @@ src/
 supabase/schema.sql        tables, RLS policies, functions
 ```
 
+## Waiting, and going wrong
+
+Two loaders, because there are two waits. `index.html` carries a small inline
+splash for the gap before the bundle has parsed - inline because a stylesheet
+request there would be one more round trip in front of the thing it is covering
+for. React replaces the whole of `#root` on mount, so nothing has to tear it
+down. Once the app is up, `Loader` covers the second wait, while the synced
+board works out which household this device belongs to.
+
+`public/404.html` is what GitHub Pages serves for a path that was never part of
+the app. It is standalone - no shared stylesheet - because the bundle it would
+have linked to is hashed per build and may not exist.
+
+There is no sitemap, deliberately. This is one screen behind an anonymous
+sign-in for two named people; a sitemap would list a single URL and teach a
+crawler nothing. `public/robots.txt` asks them not to index it at all, which is
+the honest version of the same instinct.
+
 ## Theming
 
 Five themes ship in `src/theme/themes.js`: Sticker Club, Milk & Lilac,

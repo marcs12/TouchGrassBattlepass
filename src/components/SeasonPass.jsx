@@ -118,7 +118,7 @@ export default function SeasonPass({
             aria-valuemax={100}
             aria-label={next ? `Progress to tier ${next.n}` : 'Season complete'}
           >
-            <span style={{ width: `${bandProgress}%` }} />
+            <span style={{ '--fill': `${bandProgress}%` }} />
           </div>
           <p className="nextup__hint">
             {next ? (

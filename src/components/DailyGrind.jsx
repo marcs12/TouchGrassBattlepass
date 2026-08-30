@@ -242,7 +242,7 @@ export default function DailyGrind({
             aria-valuemax={100}
             aria-label={`${active.name}'s progress toward the full daily list`}
           >
-            <span style={{ width: `${goalProgress}%` }} />
+            <span style={{ '--fill': `${goalProgress}%` }} />
           </div>
           <p className="nextup__hint">
             <strong>

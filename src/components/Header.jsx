@@ -140,7 +140,7 @@ export default function Header({
                   : `Saving for ${wish.title}, ${wish.progress}% of the way`
               }
             >
-              <span style={{ width: `${wish.progress}%` }} />
+              <span style={{ '--fill': wish.progress / 100 }} />
             </span>
           )}
         </div>

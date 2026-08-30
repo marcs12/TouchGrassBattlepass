@@ -1,6 +1,6 @@
 // Shell caching only. The board itself is live data from Supabase and must
 // never be served stale, so anything cross-origin goes straight to the network.
-const CACHE = 'tgbp-shell-v2'
+const CACHE = 'tgbp-shell-v3'
 
 self.addEventListener('install', (event) => {
   self.skipWaiting()
@@ -59,11 +59,19 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         try {
           const fresh = await fetch(request)
-          const cache = await caches.open(CACHE)
-          cache.put(request, fresh.clone())
-          // The page names every asset this build needs, so it doubles as the
-          // keep-list: anything else under /assets/ belongs to an old deploy.
-          event.waitUntil(prune(fresh.clone()))
+
+          // Only a real page is worth keeping. A 404 is still a response, and
+          // caching one would hand it back offline; worse, it names no assets,
+          // so pruning against it would empty the shell cache and take the
+          // whole app offline with it.
+          if (fresh.ok) {
+            const cache = await caches.open(CACHE)
+            cache.put(request, fresh.clone())
+            // The page names every asset this build needs, so it doubles as
+            // the keep-list: anything else under /assets/ is an old deploy.
+            event.waitUntil(prune(fresh.clone()))
+          }
+
           return fresh
         } catch {
           const cached = await caches.match(request)

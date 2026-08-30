@@ -108,7 +108,7 @@ export default function Storefront({
                 aria-valuemax={100}
                 aria-label={`Progress toward ${nextUp.title}`}
               >
-                <span style={{ width: `${nextProgress}%` }} />
+                <span style={{ '--fill': `${nextProgress}%` }} />
               </div>
               <p className="nextup__hint">
                 {balance === 0 && redeemed.length === 0 ? (

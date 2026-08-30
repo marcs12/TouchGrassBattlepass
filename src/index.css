@@ -49,6 +49,10 @@
   --z-sticky: 20;
   --z-pop: 40;
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  /* Decelerating, for things arriving on screen: fast off the mark, long
+     settle. The default has a touch of overshoot that reads as a wobble on
+     anything the size of a whole view. */
+  --ease-out: cubic-bezier(0.16, 0.84, 0.28, 1);
 
   color-scheme: light;
   font-family: var(--font-body);
@@ -502,12 +506,17 @@ h3 {
 .meter span {
   display: block;
   height: 100%;
+  width: 100%;
   background-image: repeating-linear-gradient(
     90deg,
     var(--accent) 0 10px,
     transparent 10px 13px
   );
-  transition: width 0.35s var(--ease);
+  /* The fill is drawn at full width and revealed by a clip. Animating `width`
+     relaid the bar out on every frame, and it also slid the stripes along;
+     this moves paint only, and the dashes stay where they are. */
+  clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0);
+  transition: clip-path 0.42s var(--ease);
 }
 
 /* ---------- controls ---------- */
@@ -986,6 +995,14 @@ h3 {
 }
 
 .habit--done .habit__box {
+  animation: box-thump 0.34s var(--ease) both;
+}
+
+.habit--done .habit__box svg {
+  animation: check-pop 0.36s var(--ease) both;
+}
+
+.habit--done .habit__box {
   background: var(--accent);
 }
 
@@ -1435,7 +1452,34 @@ h3 {
 @keyframes view-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translate3d(0, 10px, 0) scale(0.995);
+  }
+}
+
+/* The tick landing. It runs whenever the box gains its check, which includes
+   a tab coming back - by design: the list arriving already ticked should look
+   like it was ticked, not like it was always that way. */
+@keyframes check-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-18deg);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.25) rotate(4deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes box-thump {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.12);
   }
 }
 
@@ -1485,7 +1529,7 @@ h3 {
 }
 
 .view {
-  animation: view-in 0.22s var(--ease) both;
+  animation: view-in 0.3s var(--ease-out) both;
 }
 
 .themer__menu {
@@ -2293,7 +2337,31 @@ h3 {
   animation: print 0.42s var(--ease) both;
 }
 
+/* A ring that opens out from behind the medallion as the card lands, so the
+   moment has a beat rather than just appearing. Pure transform and opacity,
+   and it never affects layout - it is drawn outside the flow. */
+.party__art::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  border: 2.5px solid var(--accent);
+  animation: ring-out 0.9s var(--ease-out) 0.12s both;
+}
+
+@keyframes ring-out {
+  from {
+    opacity: 0.9;
+    transform: scale(0.62);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
 .party__art {
+  position: relative;
   display: grid;
   place-items: center;
   width: 56px;
@@ -2996,6 +3064,41 @@ h3 {
   animation: print 0.34s var(--ease) both;
 }
 
+/* A sheet rising from the bottom edge is right on a phone, where the bottom
+   edge is where your thumb is. On a laptop it means the thing you just tapped
+   at the top of the window answers from the far side of the screen, so it
+   arrives as a panel in the corner instead - beside the list, not under it. */
+@media (min-width: 760px) {
+  .sheet {
+    align-items: start;
+    justify-items: end;
+    padding: 88px 20px 20px;
+  }
+
+  /* Barely there: on a laptop this is a panel beside the work, not a modal
+     over it. Enough to say the rest is not live, not enough to hide it. */
+  .sheet__scrim {
+    background: color-mix(in srgb, var(--ink) 12%, transparent);
+  }
+
+  .sheet__body {
+    width: min(380px, 100%);
+    margin: 0;
+    padding: 18px;
+    border-radius: var(--radius-lg);
+    box-shadow: 6px 6px 0 var(--shadow-color);
+    animation-name: panel-in;
+    animation-duration: 0.32s;
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translate3d(26px, -8px, 0) scale(0.98);
+  }
+}
+
 .sheet__head {
   display: flex;
   align-items: center;
@@ -3215,6 +3318,73 @@ h3 {
   transform: rotate(180deg);
 }
 
+/* ---------- waiting ---------- */
+
+.loader {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 26px 16px 30px;
+  text-align: center;
+}
+
+.loader__art {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: var(--border-w) solid var(--ink);
+  background: var(--bar);
+  color: var(--ink);
+  animation: breathe 1.8s var(--ease) infinite;
+}
+
+.loader__note {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+/* An indeterminate bar: it says "working", not "42% of the way", because
+   nothing here knows how long the network is going to take. */
+.loader__track {
+  overflow: hidden;
+  width: min(200px, 70%);
+  height: 10px;
+  border-radius: var(--pill);
+  border: 1.5px solid var(--ink);
+  background: var(--surface-2);
+}
+
+.loader__track i {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: sweep 1.25s var(--ease) infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes sweep {
+  from {
+    transform: translate3d(-110%, 0, 0);
+  }
+  to {
+    transform: translate3d(320%, 0, 0);
+  }
+}
+
 /* ---------- the shelf of past Sundays ---------- */
 
 .shelf {
@@ -3355,13 +3525,20 @@ h3 {
 }
 
 /* 5. Small controls keep their looks but get a thumb-sized hit area. The
-   overlay is invisible and outside the flow, so nothing moves. */
-.stepper__btn,
-.card__pin,
-.habit__proof,
-.log__stamp,
-.week__pick,
-.log__more {
+   overlay is invisible and outside the flow, so nothing moves.
+
+   `:where()` so this carries no specificity at all: `.habit__proof` positions
+   itself absolutely, and a plain class list here would out-order that and drop
+   the button into the row below. It only needs a positioned ancestor for the
+   overlay, and anything already positioned keeps what it had. */
+:where(
+  .stepper__btn,
+  .card__pin,
+  .habit__proof,
+  .log__stamp,
+  .week__pick,
+  .log__more
+) {
   position: relative;
 }
 
@@ -3433,9 +3610,12 @@ h3 {
 .bank__rail > span {
   display: block;
   height: 100%;
+  width: 100%;
+  transform: scaleX(var(--fill, 0));
+  transform-origin: left;
   border-radius: inherit;
   background: var(--ink-3);
-  transition: width 0.3s var(--ease);
+  transition: transform 0.42s var(--ease);
 }
 
 .bank__rail--ready > span {

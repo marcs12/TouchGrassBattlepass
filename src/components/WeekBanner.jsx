@@ -155,7 +155,7 @@ export default function WeekBanner({
               >
                 <span
                   style={{
-                    width: `${Math.min(100, pct(score?.score))}%`,
+                    '--fill': `${Math.min(100, pct(score?.score))}%`,
                     background: `var(--series-${index + 1})`,
                   }}
                 />

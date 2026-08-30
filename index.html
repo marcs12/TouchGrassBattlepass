@@ -27,7 +27,95 @@
     <meta name="apple-mobile-web-app-title" content="Battlepass" />
   </head>
   <body>
-    <div id="root"></div>
+    <!-- The first paint, before the bundle has parsed and React has mounted.
+         Everything it needs is inline: a stylesheet request here would be one
+         more round trip in front of the thing it is covering for. React
+         replaces the whole of #root on mount, so there is nothing to tear
+         down. -->
+    <style>
+      .boot {
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 14px;
+        min-height: 100svh;
+        padding: 24px;
+        background: #fdf1f3;
+        color: #43303a;
+        font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+        text-align: center;
+      }
+      .boot__art {
+        display: grid;
+        place-items: center;
+        width: 62px;
+        height: 62px;
+        border-radius: 50%;
+        border: 2.5px solid #43303a;
+        background: #bdeccd;
+        animation: boot-breathe 1.8s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+      }
+      .boot__name {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 0.01em;
+      }
+      .boot__track {
+        overflow: hidden;
+        width: 190px;
+        height: 10px;
+        border-radius: 99px;
+        border: 1.5px solid #43303a;
+        background: #fff7f8;
+      }
+      .boot__track i {
+        display: block;
+        width: 40%;
+        height: 100%;
+        border-radius: 99px;
+        background: #f6b8c8;
+        animation: boot-sweep 1.25s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+      }
+      @keyframes boot-breathe {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.08);
+        }
+      }
+      @keyframes boot-sweep {
+        from {
+          transform: translate3d(-110%, 0, 0);
+        }
+        to {
+          transform: translate3d(320%, 0, 0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot__art,
+        .boot__track i {
+          animation: none;
+        }
+      }
+    </style>
+
+    <div id="root">
+      <div class="boot" role="status" aria-live="polite">
+        <span class="boot__art" aria-hidden="true">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#43303a"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4.5 19.5C3 13 7 5.5 19.5 4.5c1 12.5-6.5 16.5-13 15Z" />
+            <path d="M9.5 14.5 19 5" />
+          </svg>
+        </span>
+        <p class="boot__name">Touch Grass Battlepass</p>
+        <span class="boot__track" aria-hidden="true"><i></i></span>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
