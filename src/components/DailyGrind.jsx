@@ -3,13 +3,15 @@ import { recentDays, streakFrom } from '../lib/day'
 import Icon from './Icon'
 import ItemForm from './ItemForm'
 import ContributionLog from './ContributionLog'
+import ProofSheet from './ProofSheet'
 import Scoreboard from './Scoreboard'
+import WeekBanner from './WeekBanner'
 import Window from './Window'
 
 const STRIP_DAYS = 7
 const WEEKDAY = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
-function HabitRow({ habit, done, blocked, editing, onToggle, onEdit, onRemove }) {
+function HabitRow({ habit, done, blocked, editing, proof, onToggle, onEdit, onRemove, onProof }) {
   return (
     <li>
       <button
@@ -46,6 +48,19 @@ function HabitRow({ habit, done, blocked, editing, onToggle, onEdit, onRemove })
           <span className="habit__unit">pts</span>
         </span>
       </button>
+
+      {/* Proof is offered only once the box is ticked: the point is already
+          banked, and a photo is decoration on it, never a condition of it. */}
+      {done && !editing && onProof && (
+        <button
+          type="button"
+          className={`habit__proof ${proof ? 'habit__proof--on' : ''}`}
+          aria-label={proof ? `Proof for ${habit.title}` : `Add a photo to ${habit.title}`}
+          onClick={() => onProof(habit)}
+        >
+          <Icon name="camera" size={14} strokeWidth="1.9" />
+        </button>
+      )}
 
       {editing && (
         <span className="habit__tools">
@@ -95,13 +110,23 @@ export default function DailyGrind({
   dailyHabits,
   bonusHabits,
   dailyGoal,
+  week,
+  stakes,
+  proofUrl,
   onToggleHabit,
   onAddHabit,
   onEditHabit,
   onRemoveHabit,
+  onOpenWeek,
+  onAddStake,
+  onAttachProof,
+  onClearProof,
+  onCosign,
+  onUncosign,
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(null)
+  const [shooting, setShooting] = useState(null)
   const active = members.find((m) => m.id === activeId) ?? members[0]
   const partner = members.find((m) => m.id !== active.id)
 
@@ -127,14 +152,26 @@ export default function DailyGrind({
   // Unchecking refunds points, which the shared bank has to be able to cover.
   const canUndo = (habit) => !done.has(habit.id) || balance >= habit.points
 
+  // Today's photos come straight off the log, which already carries them.
+  const proofFor = (habitId) =>
+    log.find(
+      (entry) =>
+        entry.habitId === habitId &&
+        entry.day === grind.date &&
+        entry.memberId === active.id &&
+        entry.proof
+    )?.proof ?? null
+
   const rowProps = (habit) => ({
     habit,
     done: done.has(habit.id),
     blocked: !canUndo(habit),
     editing,
+    proof: proofFor(habit.id),
     onToggle: onToggleHabit,
     onEdit: setDraft,
     onRemove: onRemoveHabit,
+    onProof: onAttachProof ? setShooting : null,
   })
 
   return (
@@ -186,6 +223,17 @@ export default function DailyGrind({
           Tick anything below to open the store. Clearing the whole daily list
           starts your streak.
         </p>
+      )}
+
+      {week && members.length > 1 && (
+        <WeekBanner
+          week={week}
+          members={members}
+          activeId={active.id}
+          stakes={stakes}
+          onOpenWeek={onOpenWeek}
+          onAddStake={onAddStake}
+        />
       )}
 
       <Scoreboard
@@ -280,7 +328,25 @@ export default function DailyGrind({
         </ul>
       </section>
 
-      <ContributionLog log={log} members={members} />
+      <ContributionLog
+        log={log}
+        members={members}
+        activeId={active.id}
+        proofUrl={proofUrl}
+        onCosign={onCosign}
+        onUncosign={onUncosign}
+      />
+
+      {shooting && (
+        <ProofSheet
+          habit={shooting}
+          proof={proofFor(shooting.id)}
+          proofUrl={proofUrl}
+          onAttach={onAttachProof}
+          onClear={onClearProof}
+          onClose={() => setShooting(null)}
+        />
+      )}
     </Window>
   )
 }

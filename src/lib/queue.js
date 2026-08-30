@@ -7,6 +7,12 @@
 // claiming a tier - is checked against the bank on the server, so queuing it
 // would let two phones overdraw the same balance while they're both offline.
 // Those stay online-only and say so.
+//
+// Proof photos are queued too, but they are the one op allowed to fail
+// without stopping the drain: a photo must never hold up a point. The blob
+// itself lives in IndexedDB (lib/proofStore); the queue only carries the fact
+// of it, keyed by the check's natural key rather than its id, because an
+// offline check-off has no server id yet.
 
 const ROWS_KEY = (household) => `tgbp.rows.${household}`
 const QUEUE_KEY = 'tgbp.queue'
@@ -46,31 +52,54 @@ export function applyPending(rows, queue) {
   let checks = rows.checks
   let redemptions = rows.redemptions
   let catalog = rows.catalog
+  let cosigns = rows.cosigns ?? []
+
+  const sameCheck = (row, match) =>
+    row.member_id === match.member_id &&
+    row.habit_id === match.habit_id &&
+    row.day === match.day
 
   for (const op of queue) {
     switch (op.type) {
       case 'check.add':
         checks = [
-          ...checks.filter(
-            (c) =>
-              !(
-                c.member_id === op.row.member_id &&
-                c.habit_id === op.row.habit_id &&
-                c.day === op.row.day
-              )
-          ),
+          ...checks.filter((c) => !sameCheck(c, op.row)),
           { ...op.row, id: op.id, created_at: new Date(op.at).toISOString() },
         ]
         break
 
       case 'check.remove':
-        checks = checks.filter(
-          (c) =>
-            !(
-              c.member_id === op.match.member_id &&
-              c.habit_id === op.match.habit_id &&
-              c.day === op.match.day
-            )
+        checks = checks.filter((c) => !sameCheck(c, op.match))
+        break
+
+      case 'proof.upload':
+        checks = checks.map((c) =>
+          sameCheck(c, op.match)
+            ? { ...c, proof_path: op.path, proof_w: op.w, proof_h: op.h }
+            : c
+        )
+        break
+
+      case 'proof.remove':
+        checks = checks.map((c) =>
+          sameCheck(c, op.match)
+            ? { ...c, proof_path: null, proof_w: null, proof_h: null }
+            : c
+        )
+        break
+
+      case 'cosign.add':
+        cosigns = [
+          ...cosigns.filter(
+            (s) => !(s.check_id === op.row.check_id && s.member_id === op.row.member_id)
+          ),
+          { ...op.row, created_at: new Date(op.at).toISOString() },
+        ]
+        break
+
+      case 'cosign.remove':
+        cosigns = cosigns.filter(
+          (s) => !(s.check_id === op.match.check_id && s.member_id === op.match.member_id)
         )
         break
 
@@ -100,5 +129,5 @@ export function applyPending(rows, queue) {
     }
   }
 
-  return { ...rows, checks, redemptions, catalog }
+  return { ...rows, checks, redemptions, catalog, cosigns }
 }

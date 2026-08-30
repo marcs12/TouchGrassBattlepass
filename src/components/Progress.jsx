@@ -22,8 +22,10 @@ const initial = (day) =>
  * categorical pair those failed separation checks (too light, too close).
  * Identity is never colour alone - there's a legend, hover detail and a table.
  */
-export default function Progress({ history = [], members = [], goalDates }) {
-  const [rangeId, setRangeId] = useState('week')
+export default function Progress({ history = [], members = [], goalDates, fixed }) {
+  // The recap shows one particular week, so it pins the range and the picker
+  // goes away rather than offering a choice that would change the subject.
+  const [rangeId, setRangeId] = useState(fixed ?? 'week')
   const [hover, setHover] = useState(null)
   const range = RANGES.find((r) => r.id === rangeId)
 
@@ -58,19 +60,21 @@ export default function Progress({ history = [], members = [], goalDates }) {
           </p>
         </div>
 
-        <div className="filters" role="group" aria-label="Range">
-          {RANGES.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              className={`chip ${r.id === rangeId ? 'chip--on' : ''}`}
-              aria-pressed={r.id === rangeId}
-              onClick={() => setRangeId(r.id)}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
+        {!fixed && (
+          <div className="filters" role="group" aria-label="Range">
+            {RANGES.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                className={`chip ${r.id === rangeId ? 'chip--on' : ''}`}
+                aria-pressed={r.id === rangeId}
+                onClick={() => setRangeId(r.id)}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
       <p className="progress__readout label">

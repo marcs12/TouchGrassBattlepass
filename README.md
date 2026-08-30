@@ -15,6 +15,9 @@ both agreed on ahead of time.
 4. **Store** - Shop the reward catalog: fill a cart, then check out.
 5. **Coupons** - Every redeemed reward is a coupon until someone cashes it in.
    Used ones grey out instead of disappearing.
+6. **Sunday Night** - The week is its own thing: you each put something up on
+   Monday, the week scores itself on Sunday evening, and the recap hands the
+   winner what the other one wagered.
 
 Habits and rewards can be added and removed in the app - the lists that ship
 in code are just the starting point.
@@ -52,8 +55,9 @@ This is the whole setup:
    `supabase/schema.sql`, and run it. It creates the tables, the row-level
    security policies, and the functions the app calls. Then run
    `supabase/002-catalog-and-coupons.sql` (custom catalog entries and the
-   used-coupon flag) and `supabase/003-zero-seed-balance.sql` (start a season
-   with an empty bank).
+   used-coupon flag), `supabase/003-zero-seed-balance.sql` (start a season
+   with an empty bank) and `supabase/004-weeks-and-proof.sql` (Sunday Night:
+   weeks, stamps and the private bucket proof photos go in).
 3. **Turn on anonymous sign-ins.** Authentication -> Sign In / Providers ->
    enable *Anonymous sign-ins*. Devices never make an account; they get an
    anonymous identity that is tied to your household.
@@ -132,9 +136,11 @@ src/
     day.js                 local-date keys, streak math
     queue.js               offline board cache and write queue
     storage.js             local persistence
+    photo.js               shrink and re-encode a proof photo
+    proofStore.js          IndexedDB blobs for photos
     useCountUp.js          rolling number animation
   theme/                   token definitions + provider
-  data/                    rewards, habits, season track
+  data/                    rewards, habits, season track, week scoring
   components/              UI
 supabase/schema.sql        tables, RLS policies, functions
 ```
@@ -163,6 +169,7 @@ To change the defaults themselves:
   `description`, `cost`, `tier`, `icon` and `hue`.
 - `src/data/habits.js` - daily and bonus habits and their point values.
 - `src/data/season.js` - the twelve season tiers.
+- `src/data/week.js` - week boundaries, scoring, and the starting stakes.
 - `src/data/catalog.js` - merges the shipped lists with a household's own.
 
 Icons come from the stroke set in `src/components/Icon.jsx`; add a path there
@@ -183,7 +190,9 @@ What it gives you:
 
 | Tool | Why |
 | --- | --- |
-| Time travel (±1 day) | Shifts what the app calls today, so daily resets and streaks are testable without waiting overnight |
+| Time travel (±1 day, ±1 week) | Shifts what the app calls today, so daily resets, streaks and whole weeks are testable without waiting |
+| Jump past Sunday | Finishes the current week, so the recap opens itself on the reload |
+| Settle last week | Scores it on the spot instead. The server still refuses a week that hasn't ended |
 | Grant points | Lands as a habit check, so the bank and season XP move together |
 | Clear daily list | Fills every daily habit for the active player in one tap |
 | Seed 6-day streak | Backfills cleared days so the streak strip has history |
@@ -246,6 +255,44 @@ validated for the lightness band, chroma, colour-blind separation and contrast
 in both light and dark themes. Identity never rests on colour alone: there is
 a legend, a hover readout and the table.
 
+## Sunday Night
+
+The bank and the pass are the long game. The week is the short one, and it is
+the part that gives the app a moment rather than a running total.
+
+**Proof.** Any check-off can carry a photo. It is never required and it never
+gates a point: the point is banked the instant you tick the box, and the photo
+is queued separately. If the upload fails it retries behind everything else in
+the queue rather than holding up a single check-off. Photos are shrunk to about
+80KB on the device before they go anywhere, and re-encoding through a canvas
+drops the EXIF - the location tag included - on the way out.
+
+**Stamps.** The other one's check-offs can be stamped from the contribution
+log. A stamp is worth **no points at all**, deliberately: the balance is
+derived from check-offs, tier claims and redemptions, so a second source of
+points would mean rewriting that invariant to earn nothing but inflation. It is
+worth being seen, and it feeds the recap.
+
+**The week.** Monday to Sunday. Each of you is scored against the median of
+your own last four weeks rather than against each other - a brutal week at work
+shouldn't hand the other one an automatic win, and a personal best should beat
+a coast. A margin under 5% is a dead heat. Both of you put a stake up on
+Monday; the winner claims what the other one wagered. Nobody owes a forfeit.
+Clear your combined target and you both get the shared prize on top.
+
+**The recap.** Sunday from 8pm, the first launch scores the week and opens the
+recap: the week's photos as a reel, its chart, the numbers, and the result. The
+stake stays face down until you have *both* opened yours - that shared beat is
+the point of the ritual - and flips on its own after a day so nobody is
+stranded when their partner is away. Past weeks stack up on a shelf under the
+Season Pass chart.
+
+Prizes are minted as zero-cost coupons in the Redeemed tab, so a stake can be
+won without a second economy to keep track of, and the bank never moves.
+
+Stakes are edited in the app like habits and rewards are - the six that ship in
+code are just the starting point.
+
 ## Living with it
 
 A few things exist because two people share this on two phones:
@@ -264,3 +311,4 @@ A few things exist because two people share this on two phones:
 ## Still to do
 
 - Season end and rollover into Season 2
+- Thinning old weeks' photo reels once the storage bucket fills up

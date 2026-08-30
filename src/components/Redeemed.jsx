@@ -13,6 +13,9 @@ const when = (at) =>
  * Redeemed rewards are coupons: bought and paid for, but still owed until
  * someone actually cashes them in. Used ones grey out rather than disappear,
  * so the season's history stays readable.
+ *
+ * Week prizes land here too, at zero cost - which is how a stake can be won
+ * without a second economy to keep track of.
  */
 export default function Redeemed({ redeemed, members, onUse }) {
   const nameFor = (id) => members.find((m) => m.id === id)?.name
@@ -40,7 +43,9 @@ export default function Redeemed({ redeemed, members, onUse }) {
         </span>
       </div>
 
-      <span className="coupon__cost">-{item.cost.toLocaleString()}</span>
+      <span className={`coupon__cost ${item.cost === 0 ? 'coupon__cost--won' : ''}`}>
+        {item.cost === 0 ? 'Won' : `-${item.cost.toLocaleString()}`}
+      </span>
 
       <button
         type="button"

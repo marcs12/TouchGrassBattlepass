@@ -13,3 +13,15 @@ create policy redemptions_delete on redemptions
 drop policy if exists tier_claims_delete on tier_claims;
 create policy tier_claims_delete on tier_claims
   for delete using (household_id in (select my_households()));
+
+-- Added with migration 4. Weeks and cosigns are the same story: normal play
+-- only writes them through settle_week / open_week or a stamp, so a reset
+-- needs its own way in. Proof photos go too, or the bucket keeps growing
+-- against check rows that no longer exist.
+drop policy if exists weeks_delete on weeks;
+create policy weeks_delete on weeks
+  for delete using (household_id in (select my_households()));
+
+drop policy if exists cosigns_delete on cosigns;
+create policy cosigns_delete on cosigns
+  for delete using (household_id in (select my_households()));

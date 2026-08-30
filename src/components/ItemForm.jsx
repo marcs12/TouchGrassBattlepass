@@ -3,6 +3,8 @@ import Icon from './Icon'
 
 const HABIT_ICONS = ['walk', 'dumbbell', 'moon', 'droplet', 'pot', 'broom', 'book', 'phoneoff', 'mountain', 'heart', 'basket', 'spark']
 const REWARD_ICONS = ['coffee', 'icecream', 'wrap', 'moped', 'film', 'sushi', 'spa', 'serum', 'shirt', 'shoe', 'bag', 'ticket', 'car', 'hotel', 'gamepad', 'plane']
+// A stake is a favour, not a purchase: it has no price and no tier.
+const STAKE_ICONS = ['coffee', 'film', 'spa', 'broom', 'car', 'sushi', 'heart', 'gift', 'moon', 'basket']
 
 const BLANK = { title: '', note: '', points: '', icon: '', kind: 'daily', tier: 'low' }
 
@@ -12,7 +14,7 @@ const draftFrom = (item, isHabit, icons) =>
     ? {
         title: item.title ?? '',
         note: (isHabit ? item.note : item.description) ?? '',
-        points: String(isHabit ? item.points : item.cost),
+        points: String(isHabit ? (item.points ?? '') : (item.cost ?? '')),
         icon: item.icon ?? icons[0],
         kind: item.kind ?? 'daily',
         tier: item.tier ?? 'low',
@@ -20,16 +22,17 @@ const draftFrom = (item, isHabit, icons) =>
     : { ...BLANK, icon: icons[0] }
 
 /**
- * Adds a habit or a reward without touching the code. Kept deliberately small:
- * a name, a line of detail, what it's worth, and a picture.
+ * Adds a habit, a reward or a weekly stake without touching the code. Kept
+ * deliberately small: a name, a line of detail, what it's worth, a picture.
  */
 export default function ItemForm({ kind, editing, onAdd, onCancel }) {
   const isHabit = kind === 'habit'
-  const icons = isHabit ? HABIT_ICONS : REWARD_ICONS
+  const isStake = kind === 'stake'
+  const icons = isStake ? STAKE_ICONS : isHabit ? HABIT_ICONS : REWARD_ICONS
   const [draft, setDraft] = useState(() => draftFrom(editing, isHabit, icons))
 
   const points = Number(draft.points)
-  const ready = draft.title.trim().length > 0 && points > 0
+  const ready = draft.title.trim().length > 0 && (isStake || points > 0)
 
   const set = (patch) => setDraft((prev) => ({ ...prev, ...patch }))
 
@@ -38,7 +41,13 @@ export default function ItemForm({ kind, editing, onAdd, onCancel }) {
     if (!ready) return
 
     onAdd(
-      isHabit
+      isStake
+        ? {
+            title: draft.title.trim(),
+            note: draft.note.trim() || 'Added by you.',
+            icon: draft.icon,
+          }
+        : isHabit
         ? {
             title: draft.title.trim(),
             note: draft.note.trim() || 'Added by you.',
@@ -61,14 +70,22 @@ export default function ItemForm({ kind, editing, onAdd, onCancel }) {
     <form className="itemform" onSubmit={submit}>
       <p className="field">
         <label className="label" htmlFor="item-title">
-          {editing ? `Editing ${editing.title}` : isHabit ? 'Habit' : 'Reward'}
+          {editing
+            ? `Editing ${editing.title}`
+            : isStake
+            ? 'Stake'
+            : isHabit
+            ? 'Habit'
+            : 'Reward'}
         </label>
         <input
           id="item-title"
           className="input"
           value={draft.title}
           maxLength={48}
-          placeholder={isHabit ? 'Walk the dog' : 'Bubble tea run'}
+          placeholder={
+            isStake ? 'Breakfast in bed' : isHabit ? 'Walk the dog' : 'Bubble tea run'
+          }
           onChange={(e) => set({ title: e.target.value })}
         />
       </p>
@@ -87,6 +104,7 @@ export default function ItemForm({ kind, editing, onAdd, onCancel }) {
         />
       </p>
 
+      {!isStake && (
       <div className="itemform__row">
         <p className="field">
           <label className="label" htmlFor="item-points">
@@ -131,6 +149,7 @@ export default function ItemForm({ kind, editing, onAdd, onCancel }) {
           </select>
         </p>
       </div>
+      )}
 
       <fieldset className="itemform__icons">
         <legend className="label">Icon</legend>
@@ -151,7 +170,9 @@ export default function ItemForm({ kind, editing, onAdd, onCancel }) {
       <div className="itemform__actions">
         <button type="submit" className="btn" disabled={!ready}>
           <Icon name={editing ? 'check' : 'plus'} size={14} strokeWidth="2.2" />
-          {editing ? 'Save changes' : `Add ${isHabit ? 'habit' : 'reward'}`}
+          {editing
+            ? 'Save changes'
+            : `Add ${isStake ? 'stake' : isHabit ? 'habit' : 'reward'}`}
         </button>
         <button type="button" className="chip" onClick={onCancel}>
           {editing ? 'Cancel' : 'Done'}

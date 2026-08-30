@@ -2,7 +2,7 @@
 // backend: without it a day's checklist would vanish on reload, which makes
 // daily resets and streaks meaningless.
 const KEY = 'tgbp.state'
-const VERSION = 2
+const VERSION = 3
 
 // v1 was single-player: one flat `done` list and no members. Fold that day's
 // progress into the first player rather than throwing the save away.
@@ -24,6 +24,9 @@ export const loadState = () => {
     if (!raw) return null
     const parsed = JSON.parse(raw)
     if (parsed?.v === VERSION) return parsed
+    // v3 added weeks, stamps and proof photos. Everything it introduced is
+    // filled in by normalize(), so a v2 save only has to be let through.
+    if (parsed?.v === 2) return parsed
     if (parsed?.v === 1) return migrateV1(parsed)
     return null
   } catch {

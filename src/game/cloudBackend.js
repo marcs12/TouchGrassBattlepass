@@ -6,8 +6,10 @@ import {
   hueFor,
   rewardsFrom,
   slugify,
+  stakesFrom,
 } from '../data/catalog'
 import { recentDays, shiftDay, today as todayKey } from '../lib/day'
+import { minTargetFor, recapReady, scoreWeek, weekStart } from '../data/week'
 import {
   applyPending,
   cacheRows,
@@ -16,6 +18,8 @@ import {
   loadQueue,
   saveQueue,
 } from '../lib/queue'
+import { getProof, putProof, removeProof } from '../lib/proofStore'
+import { prepare } from '../lib/photo'
 
 // Supabase-backed mode: two devices, one board.
 //
@@ -25,6 +29,35 @@ import {
 const HOUSEHOLD_KEY = 'tgbp.household'
 const HISTORY_DAYS = 45
 const LOG_LIMIT = 40
+const PROOF_BUCKET = 'proof'
+// Weeks are settled on open rather than by a cron, so a pair who didn't
+// launch the app for a fortnight still gets every recap they missed.
+const SETTLE_BACKLOG = 4
+
+// Signing a URL is a round trip, and a recap reel asks for the same handful
+// over and over. Cache under the expiry so a scroll doesn't re-sign anything.
+const SIGN_FOR = 60 * 60
+const SIGN_TTL = 55 * 60 * 1000
+const signed = new Map()
+
+async function signProof(path) {
+  if (!path) return null
+  const hit = signed.get(path)
+  if (hit && Date.now() - hit.at < SIGN_TTL) return hit.url
+
+  const { data } = await supabase.storage.from(PROOF_BUCKET).createSignedUrl(path, SIGN_FOR)
+  if (!data?.signedUrl) return null
+  signed.set(path, { url: data.signedUrl, at: Date.now() })
+  return data.signedUrl
+}
+
+/**
+ * Where a photo lives. Keyed by the check's natural key, not its id: a
+ * check-off made offline has no id until it reaches the server, and the photo
+ * has to be addressable before then.
+ */
+export const proofPathFor = (household, member, habitId, day, ext = 'webp') =>
+  `${household}/${member}_${habitId}_${day}.${ext}`
 
 const rememberHousehold = (id) => {
   try {
@@ -47,7 +80,19 @@ const readHousehold = () => {
 function project(rows, today) {
   const { household, members, checks, redemptions, claims } = rows
   const catalog = rows.catalog ?? []
+  const weeks = rows.weeks ?? []
   const dailyHabits = dailyHabitsFrom(catalog)
+
+  // Stamps, hung off the check they belong to.
+  const byCheck = new Map()
+  const stamps = new Map()
+  for (const check of checks) byCheck.set(check.id, check.day)
+  for (const stamp of rows.cosigns ?? []) {
+    stamps.set(stamp.check_id, [
+      ...(stamps.get(stamp.check_id) ?? []),
+      { memberId: stamp.member_id, stamp: stamp.stamp },
+    ])
+  }
 
   const roster = [...members]
     .sort((a, b) => a.slot - b.slot)
@@ -89,6 +134,7 @@ function project(rows, today) {
     totals: byDay.get(day) ?? {},
   }))
 
+  const dailyGoal = dailyHabits.reduce((sum, h) => sum + h.points, 0)
   const spent = redemptions.reduce((sum, r) => sum + r.cost, 0)
   const bonuses = claims.reduce((sum, c) => sum + (c.bonus ?? 0), 0)
   const xp = checks.reduce((sum, c) => sum + c.points, 0)
@@ -99,7 +145,7 @@ function project(rows, today) {
     history,
     dailyHabits,
     bonusHabits: bonusHabitsFrom(catalog),
-    dailyGoal: dailyHabits.reduce((sum, h) => sum + h.points, 0),
+    dailyGoal,
     rewards: rewardsFrom(catalog),
     balance: (household?.seed_balance ?? 0) + xp + bonuses - spent,
     earned,
@@ -123,9 +169,38 @@ function project(rows, today) {
       .map((c) => ({
         id: c.id,
         memberId: c.member_id,
+        habitId: c.habit_id,
+        day: c.day,
         label: c.title,
         points: c.points,
         at: new Date(c.created_at).getTime(),
+        proof: c.proof_path
+          ? { path: c.proof_path, w: c.proof_w, h: c.proof_h }
+          : null,
+        cosigns: stamps.get(c.id) ?? [],
+      })),
+    stakes: stakesFrom(catalog),
+    // Flattened for the recap: who gave a stamp, and on which day.
+    stamps: (rows.cosigns ?? [])
+      .map((c) => ({ memberId: c.member_id, day: byCheck.get(c.check_id) }))
+      .filter((c) => c.day),
+    weeks,
+    week: {
+      ...scoreWeek({ history, members: roster, dailyGoal, start: weekStart(today), today }),
+      row: weeks.find((w) => w.start_day === weekStart(today)) ?? null,
+    },
+    // Every photo taken this week, newest first - the recap's raw material.
+    proofs: checks
+      .filter((c) => c.proof_path)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .map((c) => ({
+        id: c.id,
+        memberId: c.member_id,
+        day: c.day,
+        label: c.title,
+        path: c.proof_path,
+        w: c.proof_w,
+        h: c.proof_h,
       })),
   }
 }
@@ -137,6 +212,8 @@ const emptyRows = {
   redemptions: [],
   claims: [],
   catalog: [],
+  weeks: [],
+  cosigns: [],
 }
 
 export function useCloudGame() {
@@ -196,7 +273,7 @@ export function useCloudGame() {
     if (!id) return
     const since = shiftDay(todayKey(), -HISTORY_DAYS)
 
-    const [household, members, checks, redemptions, claims, catalog] =
+    const [household, members, checks, redemptions, claims, catalog, weeks, cosigns] =
       await Promise.all([
       supabase.from('households').select('*').eq('id', id).maybeSingle(),
       supabase.from('members').select('*').eq('household_id', id),
@@ -204,9 +281,12 @@ export function useCloudGame() {
       supabase.from('redemptions').select('*').eq('household_id', id).order('created_at', { ascending: false }),
       supabase.from('tier_claims').select('*').eq('household_id', id),
       supabase.from('catalog_items').select('*').eq('household_id', id),
+      supabase.from('weeks').select('*').eq('household_id', id).order('start_day', { ascending: false }),
+      supabase.from('cosigns').select('*').eq('household_id', id),
     ])
 
-    // A household that predates the catalog migration simply has none.
+    // Tables added by a later migration are optional: a household that
+    // predates one simply has no rows there, which must not fail the read.
     const failure = [household, members, checks, redemptions, claims].find(
       (r) => r.error
     )
@@ -253,22 +333,18 @@ export function useCloudGame() {
       }
     }
 
-    setRows({
+    const next = {
       household: household.data,
       members: members.data ?? [],
       checks: checks.data ?? [],
       redemptions: redemptions.data ?? [],
       claims: claims.data ?? [],
       catalog: catalog.error ? [] : (catalog.data ?? []),
-    })
-    cacheRows(id, {
-      household: household.data,
-      members: members.data ?? [],
-      checks: checks.data ?? [],
-      redemptions: redemptions.data ?? [],
-      claims: claims.data ?? [],
-      catalog: catalog.error ? [] : (catalog.data ?? []),
-    })
+      weeks: weeks.error ? [] : (weeks.data ?? []),
+      cosigns: cosigns.error ? [] : (cosigns.data ?? []),
+    }
+    setRows(next)
+    cacheRows(id, next)
   }, [])
 
   // Realtime is a nudge, not a diff: any change just re-reads the board.
@@ -333,24 +409,38 @@ export function useCloudGame() {
     if (!householdId) return
 
     const filter = `household_id=eq.${householdId}`
-    const channel = supabase.channel(`household:${householdId}`)
 
-    for (const table of [
+    const listen = (channel, tables) => {
+      for (const table of tables) {
+        channel.on('postgres_changes', { event: '*', schema: 'public', table, filter }, () =>
+          scheduleRefetch(householdId)
+        )
+      }
+      channel.subscribe()
+      return channel
+    }
+
+    const core = listen(supabase.channel(`household:${householdId}`), [
       'habit_checks',
       'redemptions',
       'tier_claims',
       'members',
       'catalog_items',
-    ]) {
-      channel.on('postgres_changes', { event: '*', schema: 'public', table, filter }, () =>
-        scheduleRefetch(householdId)
-      )
-    }
+    ])
 
-    channel.subscribe()
+    // Sunday Night's tables get their own channel. A binding to a table the
+    // database doesn't have yet fails the whole channel it is on, so keeping
+    // these separate means a board still syncing on the old schema loses the
+    // week's live updates rather than all of them.
+    const week = listen(supabase.channel(`household-week:${householdId}`), [
+      'weeks',
+      'cosigns',
+    ])
+
     return () => {
       clearTimeout(refetchTimer.current)
-      supabase.removeChannel(channel)
+      supabase.removeChannel(core)
+      supabase.removeChannel(week)
     }
   }, [householdId, scheduleRefetch])
 
@@ -383,12 +473,88 @@ export function useCloudGame() {
     [rows, queue, today]
   )
 
+  // A week settles itself the first time anyone opens the app after Sunday
+  // evening, and catches up on any that were missed. Both phones will try
+  // within seconds of each other: settle_week is idempotent, and this ref
+  // stops one device asking twice in a session.
+  const asked = useRef(new Set())
+
+  useEffect(() => {
+    if (!householdId || !ready || isOffline()) return
+
+    const played = (from, to) =>
+      view.history.some(
+        (row) => row.day >= from && row.day <= to && Object.keys(row.totals).length > 0
+      )
+
+    const catchUp = async () => {
+      const done = new Set(
+        view.weeks.filter((w) => w.status === 'settled').map((w) => w.start_day)
+      )
+      const current = weekStart(today)
+      let changed = false
+
+      for (let back = SETTLE_BACKLOG; back >= 1; back -= 1) {
+        const start = shiftDay(current, -7 * back)
+        if (done.has(start) || asked.current.has(start)) continue
+        if (!recapReady(start, today)) continue
+        // A week nobody played has no recap worth opening.
+        if (!played(start, shiftDay(start, 6))) continue
+
+        asked.current.add(start)
+        const { error: rpcError } = await supabase.rpc('settle_week', {
+          p_household: householdId,
+          p_start: start,
+          p_today: today,
+          p_min_target: minTargetFor(view.dailyGoal),
+        })
+        if (!rpcError) changed = true
+      }
+
+      if (changed) fetchRows(householdId)
+    }
+
+    catchUp()
+  }, [householdId, ready, today, view, fetchRows])
+
 
   // Replays queued writes in order. A failure stops the drain and leaves the
   // rest queued, so nothing is dropped and order is preserved.
   const runOp = useCallback(
     async (op) => {
       switch (op.type) {
+        case 'proof.upload': {
+          const blob = await getProof(op.key)
+          // The blob is gone - cleared cache, another device, a wiped store.
+          // Nothing to retry forever over.
+          if (!blob) return { error: null }
+
+          const { error: uploadError } = await supabase.storage
+            .from(PROOF_BUCKET)
+            .upload(op.path, blob, { contentType: blob.type, upsert: true })
+          if (uploadError) return { error: uploadError }
+
+          const { error: linkError } = await supabase
+            .from('habit_checks')
+            .update({ proof_path: op.path, proof_w: op.w, proof_h: op.h })
+            .match({ household_id: householdId, ...op.match })
+          if (linkError) return { error: linkError }
+
+          removeProof(op.key)
+          return { error: null }
+        }
+        case 'proof.remove':
+          await supabase.storage.from(PROOF_BUCKET).remove([op.path])
+          return supabase
+            .from('habit_checks')
+            .update({ proof_path: null, proof_w: null, proof_h: null })
+            .match({ household_id: householdId, ...op.match })
+        case 'cosign.add':
+          return supabase
+            .from('cosigns')
+            .upsert(op.row, { onConflict: 'check_id,member_id' })
+        case 'cosign.remove':
+          return supabase.from('cosigns').delete().match(op.match)
         case 'check.add':
           return supabase
             .from('habit_checks')
@@ -422,20 +588,34 @@ export function useCloudGame() {
 
     try {
       let pending = loadQueue()
+      // Photos that failed sit here and go back on the queue at the end, so a
+      // sulking upload can't hold up the check-offs behind it. Points first.
+      const deferred = []
+
       while (pending.length > 0) {
         const [op] = pending
         setStatus('saving')
         const { error: opError } = await runOp(op)
+
         if (opError) {
+          if (op.type === 'proof.upload') {
+            deferred.push(op)
+            pending = pending.slice(1)
+            saveQueue([...pending, ...deferred])
+            setQueue([...pending, ...deferred])
+            continue
+          }
           setStatus('error')
           setError(opError.message)
           return
         }
+
         pending = pending.slice(1)
-        saveQueue(pending)
-        setQueue(pending)
+        saveQueue([...pending, ...deferred])
+        setQueue([...pending, ...deferred])
       }
-      setStatus(isOffline() ? 'offline' : 'idle')
+
+      setStatus(deferred.length > 0 ? 'saving' : isOffline() ? 'offline' : 'idle')
       if (householdId) fetchRows(householdId)
     } finally {
       flushing.current = false
@@ -547,6 +727,107 @@ export function useCloudGame() {
       )
     },
     [householdId, activeId, today, view, enqueue]
+  )
+
+  // ---- proof, stamps and the week ---------------------------------------
+
+  /**
+   * Attaches a photo to a check-off. The point is already banked by the time
+   * this runs and nothing here can take it back: the photo is queued, and if
+   * it never uploads the check-off is simply one without a picture.
+   */
+  const attachProof = useCallback(
+    async (habit, file) => {
+      if (!householdId || !activeId) return
+      const shot = await prepare(file)
+      if (!shot) return
+
+      const path = proofPathFor(householdId, activeId, habit.id, today, shot.ext)
+      await putProof(path, shot.blob)
+      enqueue({
+        type: 'proof.upload',
+        key: path,
+        path,
+        w: shot.width,
+        h: shot.height,
+        match: { member_id: activeId, habit_id: habit.id, day: today },
+      })
+    },
+    [householdId, activeId, today, enqueue]
+  )
+
+  const clearProof = useCallback(
+    (habit, path) => {
+      if (!householdId || !activeId || !path) return
+      removeProof(path)
+      enqueue({
+        type: 'proof.remove',
+        path,
+        match: { member_id: activeId, habit_id: habit.id, day: habit.day ?? today },
+      })
+    },
+    [householdId, activeId, today, enqueue]
+  )
+
+  // Stamping the other player's check-off. Worth no points on purpose - see
+  // the migration. You cannot stamp your own; the policy says so too.
+  const cosign = useCallback(
+    (checkId, stamp = 'star') => {
+      if (!householdId || !activeId) return
+      enqueue({
+        type: 'cosign.add',
+        row: {
+          check_id: checkId,
+          household_id: householdId,
+          member_id: activeId,
+          stamp,
+        },
+      })
+    },
+    [householdId, activeId, enqueue]
+  )
+
+  const uncosign = useCallback(
+    (checkId) => {
+      if (!activeId) return
+      enqueue({ type: 'cosign.remove', match: { check_id: checkId, member_id: activeId } })
+    },
+    [activeId, enqueue]
+  )
+
+  // Slot 1 or 2 puts up that player's stake; slot 0 is the shared prize for
+  // clearing the week together.
+  const openWeek = useCallback(
+    async (slot, stake) => {
+      if (!householdId) return
+      if (isOffline()) {
+        setError('Putting up a stake needs a connection.')
+        return
+      }
+      await track(async () => {
+        const { error: rpcError } = await supabase.rpc('open_week', {
+          p_household: householdId,
+          p_start: weekStart(today),
+          p_slot: slot,
+          p_stake: stake,
+        })
+        if (rpcError) throw rpcError
+      })
+      fetchRows(householdId)
+    },
+    [householdId, today, fetchRows, track]
+  )
+
+  const markRecapOpened = useCallback(
+    async (start) => {
+      if (!householdId || isOffline()) return
+      await supabase.rpc('mark_recap_opened', {
+        p_household: householdId,
+        p_start: start,
+      })
+      fetchRows(householdId)
+    },
+    [householdId, fetchRows]
   )
 
   const redeem = useCallback(
@@ -772,14 +1053,17 @@ export function useCloudGame() {
     }
 
     const results = await Promise.all(
-      ['habit_checks', 'redemptions', 'tier_claims'].map(wipe)
+      ['habit_checks', 'redemptions', 'tier_claims', 'weeks', 'cosigns'].map(wipe)
     )
 
     const names = {
       habit_checks: 'points',
       redemptions: 'receipts',
       tier_claims: 'tier claims',
+      weeks: 'weeks',
+      cosigns: 'stamps',
     }
+    asked.current.clear()
     const cleared = results.filter(Boolean).map((t) => names[t])
     const kept = Object.keys(names)
       .filter((t) => !results.includes(t))
@@ -788,6 +1072,24 @@ export function useCloudGame() {
     fetchRows(householdId)
     return { cleared, kept }
   }, [householdId, fetchRows])
+
+  // Settles a week without waiting for Sunday evening. The server still
+  // refuses to score one that hasn't finished.
+  const devSettleWeek = useCallback(
+    async (start) => {
+      if (!householdId) return
+      asked.current.delete(start)
+      const { error: rpcError } = await supabase.rpc('settle_week', {
+        p_household: householdId,
+        p_start: start,
+        p_today: today,
+        p_min_target: minTargetFor(view.dailyGoal),
+      })
+      if (rpcError) setError(rpcError.message)
+      fetchRows(householdId)
+    },
+    [householdId, today, view, fetchRows]
+  )
 
   // Drops this device off the board without touching the shared data.
   const devForget = useCallback(async () => {
@@ -819,6 +1121,13 @@ export function useCloudGame() {
     addCatalogItem,
     editCatalogItem,
     removeCatalogItem,
+    attachProof,
+    clearProof,
+    proofUrl: signProof,
+    cosign,
+    uncosign,
+    openWeek,
+    markRecapOpened,
     status: queue.length > 0 && status !== 'error' ? (isOffline() ? 'offline' : 'saving') : status,
     pending: queue.length,
     notice,
@@ -829,6 +1138,7 @@ export function useCloudGame() {
       clearToday: devClearToday,
       clearPoints: devClearPoints,
       seedHistory: devSeedHistory,
+      settleWeek: devSettleWeek,
       forget: devForget,
       refresh: () => fetchRows(householdId),
     },

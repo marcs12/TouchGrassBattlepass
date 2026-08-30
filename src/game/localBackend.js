@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   bonusHabitsFrom,
   dailyHabitsFrom,
   hueFor,
   rewardsFrom,
   slugify,
+  stakesFrom,
 } from '../data/catalog'
 import { recentDays, shiftDay, today } from '../lib/day'
 import { loadState, saveState } from '../lib/storage'
+import { minTargetFor, recapReady, scoreWeek, weekStart } from '../data/week'
+import { getProof, putProof, removeProof } from '../lib/proofStore'
+import { prepare } from '../lib/photo'
 
 // Device-only mode. Used when no Supabase credentials are configured, and as
 // the shape both backends present to the UI.
@@ -15,6 +19,19 @@ import { loadState, saveState } from '../lib/storage'
 // A season starts empty: every point in the bank was earned by someone.
 const STARTING_BALANCE = 0
 const LOG_LIMIT = 40
+// Five weeks of days: the current one plus the four a target is the median of.
+const HISTORY_DAYS = 45
+const SETTLE_BACKLOG = 4
+
+/**
+ * Photos are keyed by the check's natural key here too, so the local and the
+ * synced backend name the same picture the same way.
+ */
+const proofKey = (member, habitId, day) => `${member}_${habitId}_${day}`
+
+// Object URLs would pile up if a scrolling list asked for the same photo over
+// and over, so each key gets one for the life of the page.
+const urls = new Map()
 
 const freshState = () => ({
   members: null,
@@ -31,6 +48,12 @@ const freshState = () => ({
   // derives this from its check rows; on-device there are no rows, so it is
   // accumulated as points move.
   history: {},
+  // Sunday Night: the weekly stakes and results, the partner's stamps, and
+  // what each photo is attached to. The photos themselves are blobs in
+  // IndexedDB - on a device-only board they never go anywhere else.
+  weeks: [],
+  cosigns: [],
+  proofs: {},
 })
 
 const normalize = (state) => {
@@ -42,6 +65,9 @@ const normalize = (state) => {
     log: state.log ?? base.log,
     catalog: state.catalog ?? [],
     history: state.history ?? {},
+    weeks: state.weeks ?? [],
+    cosigns: state.cosigns ?? [],
+    proofs: state.proofs ?? {},
     grind: { ...base.grind, ...state.grind },
     season: { ...base.season, ...state.season },
   }
@@ -51,6 +77,81 @@ const addToHistory = (history, day, member, delta) => {
   const forDay = { ...(history[day] ?? {}) }
   forDay[member] = Math.max(0, (forDay[member] ?? 0) + delta)
   return { ...history, [day]: forDay }
+}
+
+/**
+ * Scores a finished week into the state: freezes the result and mints the
+ * prizes as zero-cost coupons, exactly as `settle_week` does on the server.
+ * A week nobody played is left alone - there is no recap worth opening.
+ */
+const settleInto = (state, start) => {
+  const members = state.members ?? []
+  if (members.length < 2) return state
+  if (state.weeks.some((w) => w.start_day === start && w.status === 'settled')) return state
+
+  const history = recentDays(HISTORY_DAYS, state.grind.date).map((day) => ({
+    day,
+    totals: state.history[day] ?? {},
+  }))
+  const played = history.some(
+    (row) =>
+      row.day >= start &&
+      row.day <= shiftDay(start, 6) &&
+      Object.keys(row.totals).length > 0
+  )
+  if (!played) return state
+
+  const dailyGoal = dailyHabitsFrom(state.catalog).reduce((sum, h) => sum + h.points, 0)
+  const result = scoreWeek({
+    history,
+    members,
+    dailyGoal,
+    start,
+    today: state.grind.date,
+  })
+
+  const open = state.weeks.find((w) => w.start_day === start) ?? {}
+  const row = {
+    start_day: start,
+    status: 'settled',
+    stake_1: open.stake_1 ?? null,
+    stake_2: open.stake_2 ?? null,
+    stake_team: open.stake_team ?? null,
+    winner_member_id: result.winner,
+    score: { members: result.members, team: result.team, tie: result.tie },
+    opened_by: open.opened_by ?? [],
+    settled_at: new Date().toISOString(),
+  }
+
+  const prize = (suffix, title, icon, hue, by) => ({
+    id: `week-${start}-${suffix}`,
+    receiptId: `week-${start}-${suffix}`,
+    title,
+    description: `Week of ${start}`,
+    cost: 0,
+    icon,
+    hue,
+    tier: 'high',
+    redeemedAt: Date.now(),
+    usedAt: null,
+    by,
+  })
+
+  const won = []
+  if (result.winner) {
+    // You win what the other one put up.
+    const theirs = result.winner === members[0].id ? row.stake_2 : row.stake_1
+    won.push(prize('win', theirs ?? 'Winner picks', 'trophy', 42, result.winner))
+  }
+  if (result.team.clear) {
+    won.push(prize('team', row.stake_team ?? 'Team clear', 'flag', 138, null))
+  }
+
+  return {
+    ...state,
+    weeks: [row, ...state.weeks.filter((w) => w.start_day !== start)],
+    redeemed: [...won, ...state.redeemed],
+  }
 }
 
 const rollOver = (state, day = today()) =>
@@ -138,6 +239,8 @@ export function useLocalGame() {
       const entry = {
         id: `${habit.id}-${who}-${Date.now()}`,
         memberId: who,
+        habitId: habit.id,
+        day: prev.grind.date,
         label: undoing ? `${habit.title} (undone)` : habit.title,
         points: delta,
         at: Date.now(),
@@ -235,6 +338,140 @@ export function useLocalGame() {
           ],
     }))
   }, [])
+
+  // ---- proof, stamps and the week ---------------------------------------
+
+  const attachProof = useCallback(
+    async (habit, file) => {
+      const who = state.activeId
+      const day = state.grind.date
+      if (!who) return
+
+      const shot = await prepare(file)
+      if (!shot) return
+
+      const key = proofKey(who, habit.id, day)
+      await putProof(key, shot.blob)
+      urls.delete(key)
+
+      setState((prev) => ({
+        ...prev,
+        proofs: {
+          ...prev.proofs,
+          [key]: {
+            path: key,
+            w: shot.width,
+            h: shot.height,
+            day,
+            memberId: who,
+            label: habit.title,
+          },
+        },
+      }))
+    },
+    [state.activeId, state.grind.date]
+  )
+
+  const clearProof = useCallback((habit, path) => {
+    if (!path) return
+    removeProof(path)
+    const url = urls.get(path)
+    if (url) {
+      URL.revokeObjectURL(url)
+      urls.delete(path)
+    }
+    setState((prev) => {
+      const next = { ...prev.proofs }
+      delete next[path]
+      return { ...prev, proofs: next }
+    })
+  }, [])
+
+  const proofUrl = useCallback(async (path) => {
+    if (!path) return null
+    if (urls.has(path)) return urls.get(path)
+    const blob = await getProof(path)
+    if (!blob) return null
+    const url = URL.createObjectURL(blob)
+    urls.set(path, url)
+    return url
+  }, [])
+
+  const cosign = useCallback((checkId, stamp = 'star') => {
+    setState((prev) => ({
+      ...prev,
+      cosigns: [
+        ...prev.cosigns.filter(
+          (c) => !(c.check_id === checkId && c.member_id === prev.activeId)
+        ),
+        {
+          check_id: checkId,
+          member_id: prev.activeId,
+          stamp,
+          created_at: new Date().toISOString(),
+        },
+      ],
+    }))
+  }, [])
+
+  const uncosign = useCallback((checkId) => {
+    setState((prev) => ({
+      ...prev,
+      cosigns: prev.cosigns.filter(
+        (c) => !(c.check_id === checkId && c.member_id === prev.activeId)
+      ),
+    }))
+  }, [])
+
+  // Slot 1 or 2 is that player's stake; slot 0 is the shared prize.
+  const openWeek = useCallback((slot, stake) => {
+    setState((prev) => {
+      const start = weekStart(prev.grind.date)
+      const existing = prev.weeks.find((w) => w.start_day === start)
+      if (existing?.status === 'settled') return prev
+
+      const field = slot === 0 ? 'stake_team' : slot === 1 ? 'stake_1' : 'stake_2'
+      const row = {
+        start_day: start,
+        status: 'open',
+        stake_1: null,
+        stake_2: null,
+        stake_team: null,
+        winner_member_id: null,
+        score: null,
+        opened_by: [],
+        settled_at: null,
+        ...existing,
+        [field]: stake,
+      }
+      return { ...prev, weeks: [row, ...prev.weeks.filter((w) => w.start_day !== start)] }
+    })
+  }, [])
+
+  const markRecapOpened = useCallback((start) => {
+    setState((prev) => ({
+      ...prev,
+      weeks: prev.weeks.map((w) =>
+        w.start_day === start && !(w.opened_by ?? []).includes(prev.activeId)
+          ? { ...w, opened_by: [...(w.opened_by ?? []), prev.activeId] }
+          : w
+      ),
+    }))
+  }, [])
+
+  // Weeks settle on open, and catch up on any that were missed.
+  useEffect(() => {
+    setState((prev) => {
+      if (!prev.members) return prev
+      const current = weekStart(prev.grind.date)
+      let next = prev
+      for (let back = SETTLE_BACKLOG; back >= 1; back -= 1) {
+        const start = shiftDay(current, -7 * back)
+        if (recapReady(start, prev.grind.date)) next = settleInto(next, start)
+      }
+      return next
+    })
+  }, [state.grind.date])
 
   // ---- developer tools -------------------------------------------------
   // Same surface as the cloud backend so the panel doesn't care which is live.
@@ -348,8 +585,14 @@ export function useLocalGame() {
       log: [],
       grind: { ...prev.grind, done: {}, goalDates: {} },
       season: { xp: 0, claimed: [] },
+      weeks: [],
+      cosigns: [],
     }))
-    return { cleared: ['points', 'receipts', 'tier claims'], kept: [] }
+    return { cleared: ['points', 'receipts', 'tier claims', 'weeks', 'stamps'], kept: [] }
+  }, [])
+
+  const devSettleWeek = useCallback((start) => {
+    setState((prev) => settleInto(prev, start))
   }, [])
 
   const devForget = useCallback(() => {
@@ -361,7 +604,7 @@ export function useLocalGame() {
     location.reload()
   }, [])
 
-  const history = recentDays(30, state.grind.date).map((day) => ({
+  const history = recentDays(HISTORY_DAYS, state.grind.date).map((day) => ({
     day,
     totals: state.history[day] ?? {},
   }))
@@ -369,20 +612,65 @@ export function useLocalGame() {
   const dailyHabits = dailyHabitsFrom(state.catalog)
   const bonusHabits = bonusHabitsFrom(state.catalog)
   const rewards = rewardsFrom(state.catalog)
+  const dailyGoal = dailyHabits.reduce((sum, h) => sum + h.points, 0)
+
+  // The log carries its photo and its stamps, so one pass over it feeds both
+  // the contribution list and the recap.
+  const log = useMemo(() => {
+    const stamps = new Map()
+    for (const c of state.cosigns) {
+      stamps.set(c.check_id, [
+        ...(stamps.get(c.check_id) ?? []),
+        { memberId: c.member_id, stamp: c.stamp },
+      ])
+    }
+    return state.log.map((entry) => ({
+      ...entry,
+      // An undo keeps its place in the record but not the photo - a picture
+      // hanging off "(undone)" reads as evidence for something that isn't.
+      proof:
+        entry.points > 0
+          ? (state.proofs[proofKey(entry.memberId, entry.habitId, entry.day)] ?? null)
+          : null,
+      cosigns: stamps.get(entry.id) ?? [],
+    }))
+  }, [state.log, state.cosigns, state.proofs])
+
+  const week = {
+    ...scoreWeek({
+      history,
+      members: state.members ?? [],
+      dailyGoal,
+      start: weekStart(state.grind.date),
+      today: state.grind.date,
+    }),
+    row: state.weeks.find((w) => w.start_day === weekStart(state.grind.date)) ?? null,
+  }
 
   return {
     mode: 'local',
     ready: true,
     dailyHabits,
     bonusHabits,
-    dailyGoal: dailyHabits.reduce((sum, h) => sum + h.points, 0),
+    dailyGoal,
     rewards,
+    stakes: stakesFrom(state.catalog),
     error: null,
     code: null,
     ...state,
-    // Derived, and after the spread: state carries the raw day map under the
-    // same name and would otherwise win.
+    // Derived, and after the spread: state carries the raw versions of these
+    // under the same names and would otherwise win.
     history,
+    log,
+    week,
+    proofs: Object.values(state.proofs).sort((a, b) => (a.day < b.day ? 1 : -1)),
+    // Flattened for the recap: who gave a stamp, and on which day.
+    stamps: state.cosigns
+      .map((c) => ({
+        memberId: c.member_id,
+        day: state.log.find((e) => e.id === c.check_id)?.day,
+      }))
+      .filter((c) => c.day),
     start,
     join: null,
     pickMember: null,
@@ -394,6 +682,13 @@ export function useLocalGame() {
     addCatalogItem,
     editCatalogItem,
     removeCatalogItem,
+    attachProof,
+    clearProof,
+    proofUrl,
+    cosign,
+    uncosign,
+    openWeek,
+    markRecapOpened,
     // Device-only mode has no partner to hear from and nothing to sync.
     status: 'local',
     notice: null,
@@ -404,6 +699,7 @@ export function useLocalGame() {
       clearToday: devClearToday,
       clearPoints: devClearPoints,
       seedHistory: devSeedHistory,
+      settleWeek: devSettleWeek,
       forget: devForget,
       refresh: null,
     },

@@ -15,6 +15,7 @@ import DevPanel from './components/DevPanel'
 import PurchaseOverlay from './components/PurchaseOverlay'
 import Toast from './components/Toast'
 import Celebrate from './components/Celebrate'
+import Recap from './components/Recap'
 import { streakFrom } from './lib/day'
 import { successFeedback, tapFeedback } from './lib/haptics'
 
@@ -30,7 +31,15 @@ export default function App() {
   const [checkingOut, setCheckingOut] = useState(false)
   const [purchase, setPurchase] = useState(null)
   const [party, setParty] = useState(null)
+  // Held by week, not as a snapshot of it: opening one marks it opened, and
+  // the card only flips if the component is reading the row that just changed.
+  const [recapWeek, setRecapWeek] = useState(null)
   const seenMilestones = useRef(null)
+  // Closing a recap has to stick even before `opened_by` comes back from the
+  // server, or the effect below would reopen it on the next render. Keyed by
+  // player as well as week: on a shared device, switching profiles is how the
+  // other one gets their turn at it.
+  const shownRecaps = useRef(new Set())
 
   // Streaks are the long game, so the round numbers get a moment. Recorded
   // per member so a milestone fires once, not on every render.
@@ -85,6 +94,22 @@ export default function App() {
       note: 'Whole daily list, every one of those days.',
     })
   }, [streak, game.activeId])
+
+  // Sunday Night opens itself: the first launch after a week is scored puts
+  // the recap in front of you, once, and after that it lives on the shelf.
+  useEffect(() => {
+    if (!game.activeId || recapWeek) return
+
+    const unseen = (game.weeks ?? []).find(
+      (week) =>
+        week.status === 'settled' &&
+        !(week.opened_by ?? []).includes(game.activeId) &&
+        !shownRecaps.current.has(`${game.activeId}|${week.start_day}`)
+    )
+    if (unseen) setRecapWeek(unseen.start_day)
+  }, [game.weeks, game.activeId, recapWeek])
+
+  const recap = (game.weeks ?? []).find((w) => w.start_day === recapWeek) ?? null
 
   const checkout = async () => {
     const items = cart
@@ -182,10 +207,22 @@ export default function App() {
                 dailyHabits={game.dailyHabits}
                 bonusHabits={game.bonusHabits}
                 dailyGoal={game.dailyGoal}
+                week={game.week}
+                stakes={game.stakes}
+                proofUrl={game.proofUrl}
                 onToggleHabit={(habit) => {
                   tapFeedback()
                   game.toggleHabit(habit)
                 }}
+                onOpenWeek={game.openWeek}
+                onAddStake={(payload) => game.addCatalogItem('stake', payload)}
+                onAttachProof={game.attachProof}
+                onClearProof={game.clearProof}
+                onCosign={(checkId) => {
+                  tapFeedback()
+                  game.cosign(checkId)
+                }}
+                onUncosign={game.uncosign}
                 onAddHabit={(payload) => game.addCatalogItem('habit', payload)}
                 onEditHabit={(id, payload) =>
                   game.editCatalogItem('habit', id, payload)
@@ -201,6 +238,8 @@ export default function App() {
                 history={game.history}
                 members={game.members}
                 grind={game.grind}
+                weeks={game.weeks ?? []}
+                onOpenRecap={(week) => setRecapWeek(week.start_day)}
                 onClaimTier={(tier) => {
                   successFeedback()
                   game.claimTier(tier)
@@ -248,6 +287,24 @@ export default function App() {
         )}
 
         {party && <Celebrate celebration={party} onDone={() => setParty(null)} />}
+
+        {recap && (
+          <Recap
+            week={recap}
+            members={game.members}
+            activeId={game.activeId}
+            history={game.history}
+            goalDates={game.grind?.goalDates}
+            proofs={game.proofs ?? []}
+            stamps={game.stamps ?? []}
+            proofUrl={game.proofUrl}
+            onOpened={game.markRecapOpened}
+            onClose={() => {
+              shownRecaps.current.add(`${game.activeId}|${recap.start_day}`)
+              setRecapWeek(null)
+            }}
+          />
+        )}
 
         {game.notice && (
           <Toast notice={game.notice} onDone={game.dismissNotice} />

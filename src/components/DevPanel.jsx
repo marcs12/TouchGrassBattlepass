@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { getDayOffset, setDayOffset, today } from '../lib/day'
+import { getDayOffset, setDayOffset, shiftDay, today } from '../lib/day'
+import { weekStart } from '../data/week'
 import Icon from './Icon'
 
 const Row = ({ label, children }) => (
@@ -43,6 +44,14 @@ export default function DevPanel({ game, onClose }) {
     setOffset(next)
     setDayOffset(next)
     location.reload()
+  }
+
+  // Jumping to the coming Monday finishes the current week, which is what
+  // makes the recap reachable without waiting for an actual Sunday.
+  const nextMonday = () => {
+    const from = today()
+    const target = shiftDay(weekStart(from), 7)
+    travel(Math.round((new Date(target) - new Date(from)) / 86400000))
   }
 
   const resetTime = () => {
@@ -97,6 +106,9 @@ export default function DevPanel({ game, onClose }) {
             <button type="button" className="dev__btn" onClick={() => travel(1)}>
               +1 day
             </button>
+            <button type="button" className="dev__btn" onClick={() => travel(7)}>
+              +1 week
+            </button>
             <button type="button" className="dev__btn" onClick={resetTime}>
               now
             </button>
@@ -143,6 +155,28 @@ export default function DevPanel({ game, onClose }) {
         </section>
 
         <section className="dev__group">
+          <p className="label">Week</p>
+          <Row label="Week of">{weekStart(today())}</Row>
+          <div className="dev__buttons">
+            <button type="button" className="dev__btn" onClick={nextMonday}>
+              jump past Sunday
+            </button>
+            <button
+              type="button"
+              className="dev__btn"
+              onClick={() => dev.settleWeek?.(shiftDay(weekStart(today()), -7))}
+            >
+              settle last week
+            </button>
+          </div>
+          <p className="dev__hint">
+            Jumping past Sunday finishes the current week, and the recap opens
+            itself on the reload. Settling scores it on the spot instead - the
+            server still refuses a week that hasn't ended.
+          </p>
+        </section>
+
+        <section className="dev__group">
           <p className="label">Data</p>
           <div className="dev__buttons">
             <button type="button" className="dev__btn" onClick={() => dev.seedHistory?.(6)}>
@@ -177,8 +211,8 @@ export default function DevPanel({ game, onClose }) {
           </div>
           <p className="dev__hint">
             {game.mode === 'cloud'
-              ? 'Wipes points, receipts and tier claims for both players, back to a fresh bank.'
-              : 'Wipes points, receipts and tier claims back to a fresh bank.'}
+              ? 'Wipes points, receipts, tier claims, weeks and stamps for both players, back to a fresh bank.'
+              : 'Wipes points, receipts, tier claims, weeks and stamps back to a fresh bank.'}
           </p>
           {wipeNote && <p className="dev__hint">{wipeNote}</p>}
         </section>

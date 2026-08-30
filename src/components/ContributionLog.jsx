@@ -1,3 +1,6 @@
+import Icon from './Icon'
+import ProofImage from './ProofImage'
+
 const initial = (name) => name.trim().charAt(0).toUpperCase()
 
 const when = (at) =>
@@ -6,9 +9,16 @@ const when = (at) =>
     minute: '2-digit',
   })
 
-// Running record of who banked what. Undoing a habit shows up as a negative
-// entry rather than quietly disappearing.
-export default function ContributionLog({ log, members }) {
+/**
+ * Running record of who banked what. Undoing a habit shows up as a negative
+ * entry rather than quietly disappearing.
+ *
+ * It is also where you see the other one's week: their photo, and a stamp you
+ * can put on it. A stamp is worth no points at all - the whole economy is
+ * derived from check-offs, and a second source of points would need a rewrite
+ * to earn nothing but inflation. It is worth being seen.
+ */
+export default function ContributionLog({ log, members, activeId, proofUrl, onCosign, onUncosign }) {
   const memberFor = (id) => members.find((m) => m.id === id)
 
   if (log.length === 0) {
@@ -26,15 +36,51 @@ export default function ContributionLog({ log, members }) {
       <ul className="log">
         {log.map((entry) => {
           const member = memberFor(entry.memberId)
+          const theirs = entry.memberId !== activeId
+          const stamps = entry.cosigns ?? []
+          const mine = stamps.some((s) => s.memberId === activeId)
+
           return (
             <li key={entry.id} className="log__row">
               <span className="profile__avatar" aria-hidden="true">
                 {member ? initial(member.name) : '?'}
               </span>
+
+              {entry.proof && (
+                <ProofImage
+                  path={entry.proof.path}
+                  w={entry.proof.w}
+                  h={entry.proof.h}
+                  alt={`${entry.label}, by ${member?.name ?? 'someone'}`}
+                  proofUrl={proofUrl}
+                  className="proof--thumb"
+                />
+              )}
+
               <span className="log__meta">
                 <strong>{member?.name ?? 'Someone'}</strong>
                 <span className="log__label">{entry.label}</span>
               </span>
+
+              {/* You can't stamp your own, and an undo isn't worth applauding. */}
+              {theirs && entry.points > 0 && onCosign && (
+                <button
+                  type="button"
+                  className={`log__stamp ${mine ? 'log__stamp--on' : ''}`}
+                  aria-pressed={mine}
+                  aria-label={mine ? `Take back your stamp` : `Stamp ${entry.label}`}
+                  onClick={() => (mine ? onUncosign(entry.id) : onCosign(entry.id))}
+                >
+                  <Icon name="stamp" size={15} strokeWidth="1.9" />
+                  {stamps.length > 1 && <span>{stamps.length}</span>}
+                </button>
+              )}
+              {!theirs && stamps.length > 0 && (
+                <span className="log__stamp log__stamp--seen" title="Stamped by your partner">
+                  <Icon name="stamp" size={15} strokeWidth="1.9" />
+                </span>
+              )}
+
               <span
                 className={`log__points ${entry.points < 0 ? 'log__points--undo' : ''}`}
               >

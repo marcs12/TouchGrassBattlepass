@@ -1,5 +1,6 @@
 import { BONUS_HABITS, DAILY_HABITS } from './habits'
 import { REWARDS } from './rewards'
+import { STAKES } from './week'
 
 // The catalogs that ship in code are defaults, not the whole story: a
 // household can add its own entries and switch off the ones it doesn't want.
@@ -64,6 +65,9 @@ export const bonusHabitsFrom = (catalog = []) =>
   habitsFrom(catalog).filter((h) => h.kind === 'bonus')
 
 export const rewardsFrom = (catalog = []) => merge(REWARDS, catalog, 'reward')
+
+/** What either of you can put up for the week. Same three jobs as the rest. */
+export const stakesFrom = (catalog = []) => merge(STAKES, catalog, 'stake')
 
 /** Clearing every daily habit is what keeps a streak alive. */
 export const dailyGoalFrom = (catalog = []) =>
