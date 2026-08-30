@@ -2973,6 +2973,19 @@ h3 {
   border-width: var(--border-w);
 }
 
+/* A portrait photo at full width is taller than a phone. Cap it and show the
+   whole frame rather than cropping to fill: this is evidence, and the point is
+   to see it, not to fill a box with it. */
+.sheet .proof--big,
+.viewer .proof--big {
+  max-height: 44dvh;
+}
+
+.sheet .proof--big img,
+.viewer .proof--big img {
+  object-fit: contain;
+}
+
 .proof[data-loaded='no']::after {
   content: '';
   position: absolute;
@@ -3039,9 +3052,18 @@ h3 {
 .sheet {
   position: fixed;
   inset: 0;
+  /* dvh, not the default fixed box: on a phone the viewport a fixed element
+     gets is the tall one, so the bottom of the sheet can end up under the
+     address bar. */
+  height: 100dvh;
   z-index: 60;
   display: grid;
+  /* `safe` matters more than it looks. A grid item taller than its area and
+     aligned to the end overflows off the *top*, where there is nothing to
+     scroll to and no way back - which is exactly what a portrait photo on a
+     tall narrow phone did. `safe` gives up and aligns to the start instead. */
   align-items: end;
+  align-items: safe end;
   animation: view-in 0.2s var(--ease) both;
 }
 
@@ -3061,6 +3083,13 @@ h3 {
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   border: var(--border-w) solid var(--ink);
   background: var(--surface);
+  /* Never taller than the space it is given; scroll inside it if the contents
+     ask for more. `100%` resolves against the grid area, so it accounts for
+     the desktop padding below without repeating the numbers. */
+  max-height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   animation: print 0.34s var(--ease) both;
 }
 
@@ -3980,7 +4009,10 @@ h3 {
   inset: 0;
   z-index: 70;
   display: grid;
+  /* Same trap as the sheet: a centred item taller than the viewport is clipped
+     at both ends, and the top half is unreachable however hard you scroll. */
   place-items: center;
+  place-items: safe center;
   padding: 20px 16px;
   overflow-y: auto;
   background: color-mix(in srgb, var(--ink) 45%, transparent);
