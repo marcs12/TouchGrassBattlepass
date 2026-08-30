@@ -134,9 +134,6 @@ export default function SeasonPass({
       )}
 
       <Pane title="season-1.pass" tone="d" flush>
-        <span className="decal decal--bl" aria-hidden="true">
-          <Icon name="trophy" size={22} strokeWidth="1.9" />
-        </span>
       <ol className="track">
         {TIERS_TRACK.map((tier) => (
           <Tier

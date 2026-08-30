@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import Icon from './Icon'
+import ProofCard from './ProofCard'
 import ProofImage from './ProofImage'
 
 const initial = (name) => name.trim().charAt(0).toUpperCase()
@@ -18,8 +20,19 @@ const when = (at) =>
  * derived from check-offs, and a second source of points would need a rewrite
  * to earn nothing but inflation. It is worth being seen.
  */
-export default function ContributionLog({ log, members, activeId, proofUrl, onCosign, onUncosign }) {
+export default function ContributionLog({
+  log,
+  habits = [],
+  members,
+  activeId,
+  proofUrl,
+  onCosign,
+  onUncosign,
+}) {
+  const [open, setOpen] = useState(null)
   const memberFor = (id) => members.find((m) => m.id === id)
+  // Re-read from the live log so a stamp made inside the card updates it.
+  const opened = open ? log.find((e) => e.id === open) : null
 
   if (log.length === 0) {
     return (
@@ -47,14 +60,21 @@ export default function ContributionLog({ log, members, activeId, proofUrl, onCo
               </span>
 
               {entry.proof && (
-                <ProofImage
-                  path={entry.proof.path}
-                  w={entry.proof.w}
-                  h={entry.proof.h}
-                  alt={`${entry.label}, by ${member?.name ?? 'someone'}`}
-                  proofUrl={proofUrl}
-                  className="proof--thumb"
-                />
+                <button
+                  type="button"
+                  className="log__proof"
+                  aria-label={`See the proof for ${entry.label}`}
+                  onClick={() => setOpen(entry.id)}
+                >
+                  <ProofImage
+                    path={entry.proof.path}
+                    w={entry.proof.w}
+                    h={entry.proof.h}
+                    alt={`${entry.label}, by ${member?.name ?? 'someone'}`}
+                    proofUrl={proofUrl}
+                    className="proof--thumb"
+                  />
+                </button>
               )}
 
               <span className="log__meta">
@@ -92,6 +112,19 @@ export default function ContributionLog({ log, members, activeId, proofUrl, onCo
           )
         })}
       </ul>
+
+      {opened?.proof && (
+        <ProofCard
+          entry={opened}
+          habit={habits.find((h) => h.id === opened.habitId)}
+          member={memberFor(opened.memberId)}
+          activeId={activeId}
+          proofUrl={proofUrl}
+          onCosign={onCosign}
+          onUncosign={onUncosign}
+          onClose={() => setOpen(null)}
+        />
+      )}
     </section>
   )
 }

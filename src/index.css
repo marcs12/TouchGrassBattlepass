@@ -392,9 +392,7 @@ h3 {
 .win {
   position: relative;
   min-width: 0;
-  /* Visible, not hidden, so decals can overhang the frame the way they do on
-     the reference boards. The bar rounds its own top corners instead. */
-  overflow: visible;
+  overflow: hidden;
   border-radius: var(--radius-lg);
   border: var(--border-w) solid var(--ink);
   background: var(--surface);
@@ -406,8 +404,6 @@ h3 {
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  border-radius: calc(var(--radius-lg) - var(--border-w))
-    calc(var(--radius-lg) - var(--border-w)) 0 0;
   border-bottom: var(--border-w) solid var(--ink);
   background: var(--bar);
 }
@@ -3218,18 +3214,18 @@ h3 {
 }
 
 /* ---------------------------------------------------------------------------
-   Sticker-desk layer: nested panes, pixel punctuation, stuck-on decals.
+   Sticker-desk layer: nested panes and pixel punctuation.
 
    The references are stacks of little titled windows on a ruled desk, each
-   with its own pastel titlebar, with stickers breaking the frames. Everything
-   below exists to make a section of this app read as one of those windows.
+   with its own pastel titlebar. Everything below exists to make a section of
+   this app read as one of those windows.
 --------------------------------------------------------------------------- */
 
 .pane {
   position: relative;
   min-width: 0;
   margin-bottom: 18px;
-  overflow: visible;
+  overflow: hidden;
   border-radius: var(--radius-md);
   border: var(--border-w) solid var(--ink);
   background: var(--surface);
@@ -3242,8 +3238,6 @@ h3 {
   justify-content: space-between;
   gap: 10px;
   padding: 7px 11px;
-  border-radius: calc(var(--radius-md) - var(--border-w))
-    calc(var(--radius-md) - var(--border-w)) 0 0;
   border-bottom: var(--border-w) solid var(--ink);
   background: var(--tone-a);
   color: var(--tone-ink);
@@ -3327,40 +3321,6 @@ h3 {
   margin: 0 0 16px;
   padding: 0;
   list-style: none;
-}
-
-/* ---------- decals ---------- */
-
-/* Stuck on top of the frames, with the white die-cut halo and hard offset the
-   references give every sticker. Decorative only: never a control. */
-.decal {
-  position: absolute;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  border: var(--border-w) solid var(--ink);
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--shadow-color);
-  pointer-events: none;
-  transform: rotate(-8deg);
-}
-
-/* Clear of the titlebar: a decal that covers the window dots reads as a bug,
-   not as a sticker. */
-.decal--tr {
-  top: 50%;
-  right: -20px;
-  margin-top: -23px;
-  transform: rotate(9deg);
-}
-
-.decal--bl {
-  bottom: -18px;
-  left: -16px;
 }
 
 /* ---------- speech bubble ---------- */
@@ -3496,4 +3456,99 @@ h3 {
   color: var(--tone-ink);
   box-shadow: 2px 2px 0 var(--shadow-color);
   transform: rotate(-1.2deg);
+}
+
+/* ---------- proof viewer ---------- */
+
+/* The thumbnail is a way in, not a picture: it needs a hit target and a press. */
+.log__proof {
+  display: block;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  transition: transform 0.12s var(--ease);
+}
+
+.log__proof:hover {
+  transform: translate(-1px, -1px) rotate(-2deg);
+}
+
+.log__proof:active {
+  transform: translate(1px, 1px);
+}
+
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 20px 16px;
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
+  animation: view-in 0.2s var(--ease) both;
+}
+
+/* A floating window, the same object as a pane: the references open their
+   detail views as another little titled window, never as a bare overlay. */
+.viewer__win {
+  width: min(420px, 100%);
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface);
+  box-shadow: 6px 6px 0 var(--shadow-color);
+  animation: print 0.34s var(--ease) both;
+}
+
+.viewer__body {
+  display: grid;
+  gap: 13px;
+  padding: 14px;
+}
+
+.viewer__meta {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 0;
+}
+
+.viewer__who {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1px;
+  min-width: 0;
+}
+
+.viewer__who strong {
+  font-size: 15px;
+}
+
+.viewer__points {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: var(--display-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+}
+
+.viewer__note {
+  margin: 0;
+}
+
+.viewer__note-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-2);
 }

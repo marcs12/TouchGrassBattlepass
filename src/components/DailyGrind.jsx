@@ -230,9 +230,6 @@ export default function DailyGrind({
 
       {week && members.length > 1 && (
         <Pane title="this-week.exe" tone="d">
-          <span className="decal decal--tr" aria-hidden="true">
-            <Icon name="flame" size={22} strokeWidth="1.9" />
-          </span>
           <WeekBanner
             week={week}
             members={members}
@@ -371,9 +368,10 @@ export default function DailyGrind({
       <Pane title="contributions" tone="a" flush>
         <ContributionLog
           log={log}
-        members={members}
-        activeId={active.id}
-        proofUrl={proofUrl}
+          habits={[...dailyHabits, ...bonusHabits]}
+          members={members}
+          activeId={active.id}
+          proofUrl={proofUrl}
           onCosign={onCosign}
           onUncosign={onUncosign}
         />
