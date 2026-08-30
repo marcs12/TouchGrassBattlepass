@@ -1130,7 +1130,7 @@ export function useCloudGame() {
    * rolls over exactly once.
    */
   const endSeason = useCallback(
-    async (required) => {
+    async (required, season) => {
       if (!householdId) return
       if (isOffline()) {
         setError('Rolling over needs a connection - the season is closed on the server.')
@@ -1140,6 +1140,10 @@ export function useCloudGame() {
         const { error: rpcError } = await supabase.rpc('end_season', {
           p_household: householdId,
           p_required: required,
+          // Which season this phone thinks it is ending. If the other one got
+          // there first the server returns quietly rather than refusing a
+          // rollover that already happened.
+          p_season: season ?? null,
         })
         if (rpcError) throw rpcError
       })
@@ -1441,7 +1445,7 @@ export function useCloudGame() {
       settleWeek: devSettleWeek,
       // A single point is enough for the server: the twelve-tier gate is the
       // client's, and this is the tool for not waiting on it.
-      endSeason: () => endSeason(1),
+      endSeason: () => endSeason(1, view.season?.n),
       thinProofs: thinOldProofs,
       forget: devForget,
       refresh: () => fetchRows(householdId),

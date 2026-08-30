@@ -558,8 +558,12 @@ export function useLocalGame() {
    * the server: the season's XP is frozen onto the shelf, the track resets, and
    * the bank, the coupons, the streaks and the photos all carry over.
    */
-  const endSeason = useCallback((required) => {
+  // `season` is what the synced backend uses to spot a rollover the other
+  // phone already did; on one device there is no race, so it only has to keep
+  // the same shape.
+  const endSeason = useCallback((required, season) => {
     setState((prev) => {
+      if (season != null && season !== prev.season.n) return prev
       if (prev.season.xp < Math.max(1, required ?? 1)) return prev
       return {
         ...prev,
@@ -873,7 +877,7 @@ export function useLocalGame() {
       clearPoints: devClearPoints,
       seedHistory: devSeedHistory,
       settleWeek: devSettleWeek,
-      endSeason: () => endSeason(1),
+      endSeason: () => endSeason(1, state.season.n),
       thinProofs: thinOldProofs,
       forget: devForget,
       refresh: null,

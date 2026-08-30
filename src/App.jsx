@@ -284,7 +284,7 @@ export default function App() {
                 onOpenRecap={(week) => setRecapWeek(week.start_day)}
                 onEndSeason={async () => {
                   const finished = game.season.n ?? 1
-                  await game.endSeason(SEASON_XP_TOTAL)
+                  await game.endSeason(SEASON_XP_TOTAL, finished)
                   successFeedback()
                   setParty({
                     id: `season-${finished}`,
