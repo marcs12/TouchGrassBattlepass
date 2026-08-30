@@ -101,7 +101,13 @@ export default function Header({
         <ThemePicker />
         <div className="bank">
           <span className="bank__label label">
-            Shared bank
+            {/* The chip says what the bank is for when there is something to
+                save for. Just the name: "Saving for " would eat the whole box
+                and truncate away the only part worth reading. The rail below
+                and the tooltip carry the rest. */}
+            <span className="bank__for" title={wish ? `Saving for ${wish.title}` : undefined}>
+              {wish ? wish.title : 'Shared bank'}
+            </span>
             <SyncDot status={status} pending={pending} />
           </span>
           <span className="bank__value">
@@ -119,28 +125,22 @@ export default function Header({
             </span>
           )}
 
-          {/* Something to save for beats a bare number: the bank means more
-              when it is measured against the thing you both want. */}
+          {/* Progress rides the bottom edge of the chip, out of the layout
+              entirely, so pinning something never moves the bar around it. */}
           {wish && (
-            <span className="bank__wish">
-              <span
-                className="meter meter--thin"
-                role="progressbar"
-                aria-valuenow={wish.progress}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label={
-                  wish.ready
-                    ? `${wish.title} is affordable`
-                    : `Saving for ${wish.title}`
-                }
-              >
-                <span style={{ width: `${wish.progress}%` }} />
-              </span>
-              <span className="bank__wish-text label">
-                <Icon name={wish.ready ? 'check' : 'target'} size={11} strokeWidth="2.2" />
-                {wish.ready ? `${wish.title} — ready` : wish.title}
-              </span>
+            <span
+              className={`bank__rail ${wish.ready ? 'bank__rail--ready' : ''}`}
+              role="progressbar"
+              aria-valuenow={wish.progress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={
+                wish.ready
+                  ? `${wish.title} is affordable`
+                  : `Saving for ${wish.title}, ${wish.progress}% of the way`
+              }
+            >
+              <span style={{ width: `${wish.progress}%` }} />
             </span>
           )}
         </div>

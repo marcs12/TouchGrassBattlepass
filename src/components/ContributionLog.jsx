@@ -5,6 +5,10 @@ import ProofImage from './ProofImage'
 
 const initial = (name) => name.trim().charAt(0).toUpperCase()
 
+// The backends keep the last 40 check-offs. Forty rows is a wall, and the ones
+// worth seeing are the ones that just happened, so the rest wait behind a tap.
+const PREVIEW = 8
+
 const when = (at) =>
   new Date(at).toLocaleTimeString(undefined, {
     hour: 'numeric',
@@ -30,6 +34,7 @@ export default function ContributionLog({
   onUncosign,
 }) {
   const [open, setOpen] = useState(null)
+  const [all, setAll] = useState(false)
   const memberFor = (id) => members.find((m) => m.id === id)
   // Re-read from the live log so a stamp made inside the card updates it.
   const opened = open ? log.find((e) => e.id === open) : null
@@ -47,7 +52,7 @@ export default function ContributionLog({
     <section className="habits">
       <h3 className="habits__title label">Contributions · most recent first</h3>
       <ul className="log">
-        {log.map((entry) => {
+        {(all ? log : log.slice(0, PREVIEW)).map((entry) => {
           const member = memberFor(entry.memberId)
           const theirs = entry.memberId !== activeId
           const stamps = entry.cosigns ?? []
@@ -112,6 +117,23 @@ export default function ContributionLog({
           )
         })}
       </ul>
+
+      {log.length > PREVIEW && (
+        <button
+          type="button"
+          className="log__more"
+          aria-expanded={all}
+          onClick={() => setAll((open) => !open)}
+        >
+          <Icon
+            name="chevron"
+            size={14}
+            strokeWidth="2.2"
+            className={all ? 'log__more-arrow log__more-arrow--up' : 'log__more-arrow'}
+          />
+          {all ? 'Show fewer' : `Show all ${log.length}`}
+        </button>
+      )}
 
       {opened?.proof && (
         <ProofCard

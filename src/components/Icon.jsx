@@ -255,6 +255,7 @@ const PATHS = {
   ),
 
   // ui chrome
+  minus: <path d="M5 12h14" />,
   leaf: (
     <>
       <path d="M4.5 19.5C3 13 7 5.5 19.5 4.5c1 12.5-6.5 16.5-13 15Z" />

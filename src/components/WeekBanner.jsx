@@ -187,26 +187,36 @@ export default function WeekBanner({
               {/* Both of you can move either handicap. It is a number you agree
                   on out loud; the app is not the referee. */}
               {onHandicap && row?.status !== 'settled' && (
-                <p className="week__handicap label">
-                  <span>handicap</span>
-                  <button
-                    type="button"
-                    aria-label={`Lower ${member.name}'s handicap`}
-                    disabled={handicapOf(member) <= HANDICAP_MIN}
-                    onClick={() => bump(member, -HANDICAP_STEP)}
+                <div className="week__handicap">
+                  <span className="label">handicap</span>
+                  <span
+                    className="stepper"
+                    role="group"
+                    aria-label={`${member.name}'s handicap`}
                   >
-                    −
-                  </button>
-                  <strong>×{handicapOf(member).toFixed(2)}</strong>
-                  <button
-                    type="button"
-                    aria-label={`Raise ${member.name}'s handicap`}
-                    disabled={handicapOf(member) >= HANDICAP_MAX}
-                    onClick={() => bump(member, HANDICAP_STEP)}
-                  >
-                    +
-                  </button>
-                </p>
+                    <button
+                      type="button"
+                      className="stepper__btn"
+                      aria-label={`Lower ${member.name}'s handicap`}
+                      disabled={handicapOf(member) <= HANDICAP_MIN}
+                      onClick={() => bump(member, -HANDICAP_STEP)}
+                    >
+                      <Icon name="minus" size={14} strokeWidth="2.6" />
+                    </button>
+                    <output className="stepper__value">
+                      ×{handicapOf(member).toFixed(2)}
+                    </output>
+                    <button
+                      type="button"
+                      className="stepper__btn"
+                      aria-label={`Raise ${member.name}'s handicap`}
+                      disabled={handicapOf(member) >= HANDICAP_MAX}
+                      onClick={() => bump(member, HANDICAP_STEP)}
+                    >
+                      <Icon name="plus" size={14} strokeWidth="2.6" />
+                    </button>
+                  </span>
+                </div>
               )}
             </li>
           )
