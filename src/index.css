@@ -68,11 +68,15 @@ body,
 body {
   margin: 0;
   background-color: var(--paper);
+  /* Grid ruling over a soft three-stop wash. The references never sit their
+     windows on a flat field; the desk underneath is part of the picture. */
   background-image:
     linear-gradient(var(--paper-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--paper-grid) 1px, transparent 1px);
-  background-size: 34px 34px;
-  background-position: -1px -1px;
+    linear-gradient(90deg, var(--paper-grid) 1px, transparent 1px),
+    linear-gradient(160deg, var(--paper-2) 0%, var(--paper) 42%, var(--paper-3) 100%);
+  background-size: 34px 34px, 34px 34px, 100% 100%;
+  background-position: -1px -1px, -1px -1px, 0 0;
+  background-attachment: scroll, scroll, fixed;
   color: var(--ink);
   font-size: 16px;
   line-height: 1.55;
@@ -107,10 +111,12 @@ h3 {
 .label {
   font-family: var(--font-label);
   font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
+  font-weight: 400;
+  /* A bitmap face already carries its own sidebearings; the old tracking was
+     tuned for DM Mono and pulls Silkscreen apart into loose pixels. */
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 
 /* ---------- app shell ---------- */
@@ -361,20 +367,6 @@ h3 {
   background: var(--surface-2);
 }
 
-.themer__swatch {
-  display: flex;
-  flex: none;
-  overflow: hidden;
-  width: 34px;
-  height: 22px;
-  border-radius: 6px;
-  border: 1.5px solid var(--ink);
-}
-
-.themer__swatch i {
-  flex: 1;
-}
-
 .themer__meta {
   display: grid;
   min-width: 0;
@@ -398,8 +390,11 @@ h3 {
 /* ---------- window chrome ---------- */
 
 .win {
+  position: relative;
   min-width: 0;
-  overflow: hidden;
+  /* Visible, not hidden, so decals can overhang the frame the way they do on
+     the reference boards. The bar rounds its own top corners instead. */
+  overflow: visible;
   border-radius: var(--radius-lg);
   border: var(--border-w) solid var(--ink);
   background: var(--surface);
@@ -411,6 +406,8 @@ h3 {
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
+  border-radius: calc(var(--radius-lg) - var(--border-w))
+    calc(var(--radius-lg) - var(--border-w)) 0 0;
   border-bottom: var(--border-w) solid var(--ink);
   background: var(--bar);
 }
@@ -418,6 +415,15 @@ h3 {
 .win__title {
   color: var(--ink);
   font-size: 12px;
+}
+
+/* Silkscreen is a bitmap face. Antialiasing it defeats the point, and it only
+   sits on the pixel grid at whole sizes. */
+.label,
+.win__title,
+.pane__title {
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .win__dots {
@@ -2290,19 +2296,6 @@ h3 {
 
 /* ---------- first run, item tools ---------- */
 
-.firstrun {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin: 0 0 16px;
-  padding: 12px 14px;
-  border-radius: var(--radius-md);
-  border: var(--border-w) dashed var(--ink);
-  background: var(--surface-2);
-  font-size: 14px;
-  line-height: 1.45;
-}
-
 .card__tools,
 .habit__tools {
   display: flex;
@@ -3222,4 +3215,285 @@ h3 {
   .proof[data-loaded='no']::after {
     animation: none;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Sticker-desk layer: nested panes, pixel punctuation, stuck-on decals.
+
+   The references are stacks of little titled windows on a ruled desk, each
+   with its own pastel titlebar, with stickers breaking the frames. Everything
+   below exists to make a section of this app read as one of those windows.
+--------------------------------------------------------------------------- */
+
+.pane {
+  position: relative;
+  min-width: 0;
+  margin-bottom: 18px;
+  overflow: visible;
+  border-radius: var(--radius-md);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--shadow-color);
+}
+
+.pane__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 11px;
+  border-radius: calc(var(--radius-md) - var(--border-w))
+    calc(var(--radius-md) - var(--border-w)) 0 0;
+  border-bottom: var(--border-w) solid var(--ink);
+  background: var(--tone-a);
+  color: var(--tone-ink);
+}
+
+/* Five titlebar colours, so stacked panes never repeat. */
+.pane--a .pane__bar { background: var(--tone-a); }
+.pane--b .pane__bar { background: var(--tone-b); }
+.pane--c .pane__bar { background: var(--tone-c); }
+.pane--d .pane__bar { background: var(--tone-d); }
+.pane--e .pane__bar { background: var(--tone-e); }
+
+.pane__title {
+  font-family: var(--font-label);
+  font-size: 11px;
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--tone-ink);
+}
+
+.pane__dots {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 5px;
+}
+
+.pane__dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--tone-ink);
+  background: var(--surface);
+}
+
+.pane__body {
+  padding: 14px;
+}
+
+/* Content that supplies its own edges (a list of outlined rows) does not want
+   a second inset around it. */
+.pane--flush .pane__body {
+  padding: 10px;
+}
+
+.pane > :last-child {
+  margin-bottom: 0;
+}
+
+.pane .habits:last-child,
+.pane .progress,
+.pane .shelf {
+  margin-bottom: 0;
+}
+
+/* ---------- pixel punctuation ---------- */
+
+/* A five-by-five heart drawn in box-shadow pixels: no asset, no font, and it
+   stays crisp at any zoom because every pixel is a real 2px square. */
+.pixheart {
+  display: inline-block;
+  width: 2px;
+  height: 2px;
+  margin: 0 9px 3px 0;
+  background: transparent;
+  color: var(--accent-2);
+  box-shadow:
+    2px 0, 4px 0, 8px 0, 10px 0,
+    0 2px, 2px 2px, 4px 2px, 6px 2px, 8px 2px, 10px 2px, 12px 2px,
+    0 4px, 2px 4px, 4px 4px, 6px 4px, 8px 4px, 10px 4px, 12px 4px,
+    2px 6px, 4px 6px, 6px 6px, 8px 6px, 10px 6px,
+    4px 8px, 6px 8px, 8px 8px,
+    6px 10px;
+  vertical-align: middle;
+}
+
+.pixrule {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+/* ---------- decals ---------- */
+
+/* Stuck on top of the frames, with the white die-cut halo and hard offset the
+   references give every sticker. Decorative only: never a control. */
+.decal {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--shadow-color);
+  pointer-events: none;
+  transform: rotate(-8deg);
+}
+
+/* Clear of the titlebar: a decal that covers the window dots reads as a bug,
+   not as a sticker. */
+.decal--tr {
+  top: 50%;
+  right: -20px;
+  margin-top: -23px;
+  transform: rotate(9deg);
+}
+
+.decal--bl {
+  bottom: -18px;
+  left: -16px;
+}
+
+/* ---------- speech bubble ---------- */
+
+.bubble {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 12px 15px;
+  border-radius: var(--radius-md);
+  border: var(--border-w) solid var(--ink);
+  background: var(--tone-d);
+  color: var(--tone-ink);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--shadow-color);
+}
+
+/* The tail is two stacked triangles: the ink one sits a pixel lower and wider
+   so it reads as an outline rather than a separate shape. */
+.bubble svg {
+  flex: 0 0 auto;
+}
+
+.bubble::before,
+.bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 26px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+
+.bubble::before {
+  border-width: 15px 13px 0 0;
+  border-color: var(--ink) transparent transparent transparent;
+}
+
+.bubble::after {
+  margin-left: 3px;
+  border-width: 10px 9px 0 0;
+  border-color: var(--tone-d) transparent transparent transparent;
+}
+
+/* ---------- theme picker as a paint palette ---------- */
+
+/* The reference's paint program keeps its colours as a row of chips under the
+   canvas; the theme picker is the same object. */
+.themer__palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 4px 2px 2px;
+}
+
+.themer__chip {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 46px;
+  height: 34px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  border: var(--border-w) solid var(--ink);
+  background: var(--surface);
+  box-shadow: 2px 2px 0 var(--shadow-color);
+  transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease);
+}
+
+.themer__chip i {
+  display: block;
+  height: 100%;
+}
+
+.themer__chip:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--shadow-color);
+}
+
+.themer__chip--on {
+  outline: var(--border-w) solid var(--ink);
+  outline-offset: 2px;
+}
+
+.themer__chip--on::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--surface);
+  border-radius: calc(var(--radius-sm) - 2px);
+}
+
+.themer__name {
+  margin: 8px 0 0;
+  color: var(--ink-2);
+}
+
+/* A section that already drew itself as a card loses that chrome inside a
+   pane; the pane is the card now. Its heading goes too - the titlebar says it. */
+.pane__body > .week,
+.pane__body > .streak,
+.pane__body > .scoreboard,
+.pane__body > .progress,
+.pane__body > .shelf,
+.pane__body > .habits {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.pane__body > .habits > .habits__title,
+.pane__body > .shelf > .habits__title {
+  display: none;
+}
+
+/* The desk label over a group of windows: a strip of tape, not a heading. */
+.controls--tight {
+  margin-bottom: 14px;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.controls--tight > .label {
+  padding: 5px 12px 4px;
+  border-radius: var(--radius-sm);
+  border: var(--border-w) solid var(--ink);
+  background: var(--tone-d);
+  color: var(--tone-ink);
+  box-shadow: 2px 2px 0 var(--shadow-color);
+  transform: rotate(-1.2deg);
 }

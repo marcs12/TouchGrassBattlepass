@@ -1,6 +1,7 @@
 import { SEASON, TIERS_TRACK, nextTier, tierAt } from '../data/season'
 import { useCountUp } from '../lib/useCountUp'
 import Icon from './Icon'
+import Pane from './Pane'
 import Progress from './Progress'
 import WeekShelf from './WeekShelf'
 import Window from './Window'
@@ -115,9 +116,15 @@ export default function SeasonPass({
         </div>
       </header>
 
-      <Progress history={history} members={members} goalDates={grind?.goalDates} />
+      <Pane title="progress.chart" tone="c">
+        <Progress history={history} members={members} goalDates={grind?.goalDates} />
+      </Pane>
 
-      <WeekShelf weeks={weeks} members={members} onOpen={onOpenRecap} />
+      {weeks.some((w) => w.status === 'settled') && (
+        <Pane title="sundays — newest first" tone="e" flush>
+          <WeekShelf weeks={weeks} members={members} onOpen={onOpenRecap} />
+        </Pane>
+      )}
 
       {readyCount > 0 && (
         <p className="banner">
@@ -126,6 +133,10 @@ export default function SeasonPass({
         </p>
       )}
 
+      <Pane title="season-1.pass" tone="d" flush>
+        <span className="decal decal--bl" aria-hidden="true">
+          <Icon name="trophy" size={22} strokeWidth="1.9" />
+        </span>
       <ol className="track">
         {TIERS_TRACK.map((tier) => (
           <Tier
@@ -137,6 +148,7 @@ export default function SeasonPass({
           />
         ))}
       </ol>
+      </Pane>
     </Window>
   )
 }

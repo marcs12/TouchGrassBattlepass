@@ -1,4 +1,5 @@
 import Icon from './Icon'
+import Pane from './Pane'
 import Window from './Window'
 
 const when = (at) =>
@@ -84,20 +85,18 @@ export default function Redeemed({ redeemed, members, onUse }) {
         </p>
       ) : (
         <>
-          <section className="habits">
-            <h3 className="habits__title label">Ready to use</h3>
+          <Pane title="ready-to-use" tone="a" flush>
             {active.length === 0 ? (
               <p className="empty">All cashed in. Go earn some more.</p>
             ) : (
               <ul className="coupons">{active.map(coupon)}</ul>
             )}
-          </section>
+          </Pane>
 
           {used.length > 0 && (
-            <section className="habits">
-              <h3 className="habits__title label">Used</h3>
+            <Pane title="used.archive" tone="e" flush>
               <ul className="coupons">{used.map(coupon)}</ul>
-            </section>
+            </Pane>
           )}
         </>
       )}

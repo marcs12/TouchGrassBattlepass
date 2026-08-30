@@ -4,6 +4,7 @@ import { weekDays, weekStart } from '../data/week'
 import Icon from './Icon'
 import ItemForm from './ItemForm'
 import ContributionLog from './ContributionLog'
+import Pane from './Pane'
 import ProofSheet from './ProofSheet'
 import Scoreboard from './Scoreboard'
 import WeekBanner from './WeekBanner'
@@ -220,7 +221,7 @@ export default function DailyGrind({
       </header>
 
       {balance === 0 && banked === 0 && streak === 0 && (
-        <p className="firstrun">
+        <p className="bubble">
           <Icon name="spark" size={16} strokeWidth="1.9" />
           Tick anything below to open the store. Clearing the whole daily list
           starts your streak.
@@ -228,24 +229,32 @@ export default function DailyGrind({
       )}
 
       {week && members.length > 1 && (
-        <WeekBanner
-          week={week}
-          members={members}
-          activeId={active.id}
-          stakes={stakes}
-          onOpenWeek={onOpenWeek}
-          onAddStake={onAddStake}
-        />
+        <Pane title="this-week.exe" tone="d">
+          <span className="decal decal--tr" aria-hidden="true">
+            <Icon name="flame" size={22} strokeWidth="1.9" />
+          </span>
+          <WeekBanner
+            week={week}
+            members={members}
+            activeId={active.id}
+            stakes={stakes}
+            onOpenWeek={onOpenWeek}
+            onAddStake={onAddStake}
+          />
+        </Pane>
       )}
 
-      <Scoreboard
-        members={members}
-        activeId={active.id}
-        earned={earned}
-        today={today}
-        balance={balance}
-      />
+      <Pane title="shared-bank" tone="a">
+        <Scoreboard
+          members={members}
+          activeId={active.id}
+          earned={earned}
+          today={today}
+          balance={balance}
+        />
+      </Pane>
 
+      <Pane title="streak.log" tone="b">
       <div className="streak">
         <span className="streak__count">
           <span className="streak__headline">
@@ -294,6 +303,7 @@ export default function DailyGrind({
           })}
         </ol>
       </div>
+      </Pane>
 
       <div className="controls controls--tight">
         <p className="label">Your lists</p>
@@ -332,32 +342,42 @@ export default function DailyGrind({
         )
       )}
 
-      <section className="habits">
-        <h3 className="habits__title label">Daily · resets at midnight</h3>
-        <ul className="habits__list">
-          {dailyHabits.map((habit) => (
-            <HabitRow key={habit.id} {...rowProps(habit)} />
-          ))}
-        </ul>
-      </section>
+      <Pane title="daily.list — resets at midnight" tone="c" flush>
+        <section className="habits">
+          <ul className="habits__list">
+            {dailyHabits.map((habit) => (
+              <HabitRow key={habit.id} {...rowProps(habit)} />
+            ))}
+          </ul>
+        </section>
+      </Pane>
 
-      <section className="habits">
-        <h3 className="habits__title label">Bonus · bigger jobs, bigger payout</h3>
-        <ul className="habits__list">
-          {bonusHabits.map((habit) => (
-            <HabitRow key={habit.id} {...rowProps(habit)} />
-          ))}
-        </ul>
-      </section>
+      <ol className="pixrule" aria-hidden="true">
+        <li className="pixheart" />
+        <li className="pixheart" />
+        <li className="pixheart" />
+      </ol>
 
-      <ContributionLog
-        log={log}
+      <Pane title="bonus.list — bigger payout" tone="e" flush>
+        <section className="habits">
+          <ul className="habits__list">
+            {bonusHabits.map((habit) => (
+              <HabitRow key={habit.id} {...rowProps(habit)} />
+            ))}
+          </ul>
+        </section>
+      </Pane>
+
+      <Pane title="contributions" tone="a" flush>
+        <ContributionLog
+          log={log}
         members={members}
         activeId={active.id}
         proofUrl={proofUrl}
-        onCosign={onCosign}
-        onUncosign={onUncosign}
-      />
+          onCosign={onCosign}
+          onUncosign={onUncosign}
+        />
+      </Pane>
 
       {shooting && (
         <ProofSheet

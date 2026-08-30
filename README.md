@@ -148,9 +148,17 @@ supabase/schema.sql        tables, RLS policies, functions
 
 ## Theming
 
-Five themes ship in `src/theme/themes.js`: Sticker Club, Notepad, Blueprint,
-Matcha and Night Light. Every color, radius and font in the app resolves to a
-token, so adding a theme is one entry in that file and no CSS changes.
+Five themes ship in `src/theme/themes.js`: Sticker Club, Milk & Lilac,
+Blueprint, Matcha and Night Light. Every color, radius and font in the app
+resolves to a token, so adding a theme is one entry in that file and no CSS
+changes.
+
+The look is a pastel retro desktop: a ruled desk under a three-stop wash, and
+every section is a little titled window with its own pastel titlebar, a bitmap
+face (Silkscreen) on the chrome, thick tinted-ink outlines and hard offset
+shadows. `tone-a` through `tone-e` are those titlebar colours, cycled so no two
+stacked panes match; `Pane` is the component that draws one. The theme picker
+is the paint-palette chip row from the same world.
 
 ## Editing the catalogs
 

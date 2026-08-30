@@ -49,34 +49,37 @@ export default function ThemePicker() {
       {open && (
         <div ref={menuRef} style={menuStyle} className="themer__menu" role="menu" aria-label="App theme">
           <p className="themer__heading label">App theme</p>
-          {themes.map((t) => {
-            const active = t.id === themeId
-            return (
-              <button
-                key={t.id}
-                type="button"
-                role="menuitemradio"
-                aria-checked={active}
-                className={`themer__opt ${active ? 'themer__opt--on' : ''}`}
-                onClick={() => {
-                  setThemeId(t.id)
-                  setOpen(false)
-                  buttonRef.current?.focus()
-                }}
-              >
-                <span className="themer__swatch" aria-hidden="true">
+
+          {/* The paint program in the reference keeps its colours as a row of
+              chips under the canvas. Same object, same job: pick a colour. */}
+          <div className="themer__palette">
+            {themes.map((t) => {
+              const active = t.id === themeId
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={active}
+                  title={`${t.name} — ${t.blurb}`}
+                  className={`themer__chip ${active ? 'themer__chip--on' : ''}`}
+                  onClick={() => {
+                    setThemeId(t.id)
+                    buttonRef.current?.focus()
+                  }}
+                >
+                  <span className="sr-only">{t.name}</span>
                   {t.swatch.map((c) => (
-                    <i key={c} style={{ background: c }} />
+                    <i key={c} style={{ background: c }} aria-hidden="true" />
                   ))}
-                </span>
-                <span className="themer__meta">
-                  <strong>{t.name}</strong>
-                  <small>{t.blurb}</small>
-                </span>
-                {active && <Icon name="check" size={16} className="themer__check" />}
-              </button>
-            )
-          })}
+                </button>
+              )
+            })}
+          </div>
+
+          <p className="themer__name label">
+            {themes.find((t) => t.id === themeId)?.blurb}
+          </p>
         </div>
       )}
     </div>
