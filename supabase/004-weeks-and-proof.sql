@@ -21,8 +21,9 @@
 
 create table if not exists weeks (
   household_id uuid not null references households (id) on delete cascade,
-  -- Monday, in the pair's own timezone. The client decides where a week
-  -- starts for the same reason it decides where a day starts.
+  -- Sunday, in the pair's own timezone. The client decides where a week
+  -- starts for the same reason it decides where a day starts - which is also
+  -- why moving that boundary needs no migration.
   start_day date not null,
   -- Text snapshots rather than references, for the same reason
   -- habit_checks.title is one: editing the stake list later must not rewrite

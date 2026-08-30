@@ -46,11 +46,12 @@ export default function DevPanel({ game, onClose }) {
     location.reload()
   }
 
-  // Jumping to the coming Monday finishes the current week, which is what
-  // makes the recap reachable without waiting for an actual Sunday.
-  const nextMonday = () => {
+  // Lands on the Monday after the coming recap, so the week is closed *and*
+  // past the 8pm gate whatever the real clock says. Landing on the Sunday
+  // itself would only work after 8pm.
+  const pastRecap = () => {
     const from = today()
-    const target = shiftDay(weekStart(from), 7)
+    const target = shiftDay(weekStart(from), 8)
     travel(Math.round((new Date(target) - new Date(from)) / 86400000))
   }
 
@@ -158,8 +159,8 @@ export default function DevPanel({ game, onClose }) {
           <p className="label">Week</p>
           <Row label="Week of">{weekStart(today())}</Row>
           <div className="dev__buttons">
-            <button type="button" className="dev__btn" onClick={nextMonday}>
-              jump past Sunday
+            <button type="button" className="dev__btn" onClick={pastRecap}>
+              jump past the recap
             </button>
             <button
               type="button"
@@ -170,9 +171,10 @@ export default function DevPanel({ game, onClose }) {
             </button>
           </div>
           <p className="dev__hint">
-            Jumping past Sunday finishes the current week, and the recap opens
-            itself on the reload. Settling scores it on the spot instead - the
-            server still refuses a week that hasn't ended.
+            A week runs Sunday to Saturday and its recap is due the Sunday
+            after. Jumping past it closes the week and the recap opens itself
+            on the reload. Settling scores it on the spot instead - the server
+            still refuses a week that hasn't ended.
           </p>
         </section>
 

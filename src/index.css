@@ -849,11 +849,20 @@ h3 {
 }
 
 .streak__count {
+  display: grid;
+  gap: 2px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.streak__headline {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
-  color: var(--ink-2);
+}
+
+.streak__rule {
+  color: var(--ink-3);
 }
 
 .streak__count strong {
@@ -895,6 +904,12 @@ h3 {
 .streak__day--today .streak__dot {
   outline: var(--border-w) solid var(--ink);
   outline-offset: 2px;
+}
+
+/* Later this week: not a miss, so it shouldn't read like one. */
+.streak__day--ahead .streak__dot,
+.streak__day--ahead .streak__label {
+  opacity: 0.4;
 }
 
 .streak__label {
@@ -943,6 +958,8 @@ h3 {
 
 .habit--done {
   background: var(--surface-2);
+  /* Room for the proof button, so it never lands on the points. */
+  padding-right: 50px;
 }
 
 /* Checked, but the bank can no longer cover the refund. */
@@ -2694,6 +2711,8 @@ h3 {
 .week {
   display: grid;
   gap: 12px;
+  /* Matches .scoreboard below it; without this the two cards touched. */
+  margin-bottom: 18px;
   padding: 14px 16px;
   border-radius: var(--radius-lg);
   border: var(--border-w) solid var(--ink);
@@ -2857,9 +2876,13 @@ h3 {
   animation: pulse 1.4s var(--ease) infinite;
 }
 
+/* The edit tools hang off the card edge because they belong to a transient
+   mode. The proof button is always there once a row is ticked, so it sits
+   inside the card and the row reserves room for it rather than covering the
+   points. */
 .habit__proof {
   position: absolute;
-  right: -4px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
   display: grid;
@@ -3128,6 +3151,7 @@ h3 {
 .shelf {
   display: grid;
   gap: 8px;
+  margin-bottom: 18px;
 }
 
 .shelf__list {

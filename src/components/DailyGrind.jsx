@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { recentDays, streakFrom } from '../lib/day'
+import { streakFrom } from '../lib/day'
+import { weekDays, weekStart } from '../data/week'
 import Icon from './Icon'
 import ItemForm from './ItemForm'
 import ContributionLog from './ContributionLog'
@@ -8,7 +9,8 @@ import Scoreboard from './Scoreboard'
 import WeekBanner from './WeekBanner'
 import Window from './Window'
 
-const STRIP_DAYS = 7
+// The strip is the calendar week, Sunday to Saturday, so it always reads
+// S M T W T F S and lines up with the week banner above it.
 const WEEKDAY = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
 function HabitRow({ habit, done, blocked, editing, proof, onToggle, onEdit, onRemove, onProof }) {
@@ -246,26 +248,46 @@ export default function DailyGrind({
 
       <div className="streak">
         <span className="streak__count">
-          <Icon name="flame" size={18} strokeWidth="1.9" />
-          <strong>{streak}</strong> day streak · {active.name}
+          <span className="streak__headline">
+            <Icon name="flame" size={18} strokeWidth="1.9" />
+            <strong>{streak}</strong> day streak · {active.name}
+          </span>
+          {/* The rule used to live only in the first-run hint, which vanishes
+              as soon as you bank a point - so a day that never lit up looked
+              like a bug rather than an unfinished list. */}
+          {dailyHabits.length > 0 && (
+            <span className="streak__rule label">
+              {dailyDone === dailyHabits.length
+                ? 'full list cleared today'
+                : `${dailyDone} of ${dailyHabits.length} today — clear them all to keep it`}
+            </span>
+          )}
         </span>
         <ol className="streak__strip">
-          {recentDays(STRIP_DAYS, grind.date).map((key) => {
+          {weekDays(weekStart(grind.date)).map((key) => {
             const weekday = WEEKDAY[new Date(`${key}T00:00:00`).getDay()]
             const isToday = key === grind.date
+            // Days that haven't happened yet aren't misses, and shouldn't read
+            // as one.
+            const ahead = key > grind.date
             return (
               <li
                 key={key}
                 className={`streak__day ${hit.has(key) ? 'streak__day--hit' : ''} ${
                   isToday ? 'streak__day--today' : ''
-                }`}
+                } ${ahead ? 'streak__day--ahead' : ''}`}
               >
                 <span className="streak__dot" aria-hidden="true">
                   {hit.has(key) && <Icon name="check" size={12} strokeWidth="2.6" />}
                 </span>
                 <span className="streak__label">{weekday}</span>
                 <span className="sr-only">
-                  {key}: {hit.has(key) ? 'full list cleared' : 'not cleared'}
+                  {key}:{' '}
+                  {hit.has(key)
+                    ? 'full list cleared'
+                    : ahead
+                    ? 'still to come'
+                    : 'not cleared'}
                 </span>
               </li>
             )

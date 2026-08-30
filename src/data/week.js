@@ -4,24 +4,32 @@ import { shiftDay, today as todayKey } from '../lib/day'
 // backends already build, so nothing here talks to a backend and developer
 // mode's time travel works for free through `today()`.
 //
-// A week runs Monday to Sunday in the pair's own timezone, for the same
-// reason a day rolls over at their midnight rather than UTC's.
+// A week runs Sunday to Saturday in the pair's own timezone, for the same
+// reason a day rolls over at their midnight rather than UTC's. That is the
+// calendar week people already read on a wall, so the streak strip and the
+// week banner never disagree about which week you are in.
+//
+// The week therefore closes on Saturday midnight, and the recap lands the
+// following evening: Sunday Night is the look back, not the deadline.
 
 export const TARGET_WEEKS = 4 // how far back the median looks
 export const MIN_TARGET_DAYS = 3 // a fresh pair reaches 100% in three full days
 export const DEAD_HEAT = 0.05 // a margin under this is nobody's win
-export const RECAP_HOUR = 20 // Sunday evening, local
+export const RECAP_HOUR = 20 // the evening after the week closes, local
 export const REVEAL_AFTER_MS = 24 * 60 * 60 * 1000 // stake flips anyway after a day
 
-/** The Monday on or before `key`. */
+/** The Sunday on or before `key`. */
 export const weekStart = (key = todayKey()) => {
   const [y, m, d] = key.split('-').map(Number)
-  // getDay() is Sunday-first; shift so Monday is 0.
-  const monday = (new Date(y, m - 1, d).getDay() + 6) % 7
-  return shiftDay(key, -monday)
+  // getDay() is already Sunday-first, so it is the offset back to Sunday.
+  return shiftDay(key, -new Date(y, m - 1, d).getDay())
 }
 
+/** Saturday. */
 export const weekEnd = (start) => shiftDay(start, 6)
+
+/** The Sunday after the week closed - when its recap is due. */
+export const recapDay = (start) => shiftDay(start, 7)
 export const weekDays = (start) => Array.from({ length: 7 }, (_, i) => shiftDay(start, i))
 export const prevWeek = (start) => shiftDay(start, -7)
 
@@ -97,17 +105,17 @@ export function scoreWeek({ history = [], members = [], dailyGoal = 0, start, to
 }
 
 /**
- * A finished week is ready once Sunday evening has arrived, so the recap lands
- * as an event rather than at midnight while you are asleep.
+ * A finished week is ready on the Sunday evening after it closed, so the recap
+ * lands as an event rather than at midnight on Saturday while you are asleep.
  *
- * The hour only matters on the Sunday itself; any later day is already past
+ * The hour only matters on that Sunday itself; any later day is already past
  * it. Reading the day from `today` rather than the clock is what lets
  * developer mode's time travel reach a recap.
  */
 export const recapReady = (start, today = todayKey(), now = new Date()) => {
-  const end = weekEnd(start)
-  if (today > end) return true
-  if (today < end) return false
+  const due = recapDay(start)
+  if (today > due) return true
+  if (today < due) return false
   return now.getHours() >= RECAP_HOUR
 }
 

@@ -7,7 +7,8 @@ both agreed on ahead of time.
 ## How it works
 
 1. **Daily Grind** - You each keep your own checklist. If you both did it, you
-   both check it and you both get paid.
+   both check it and you both get paid. Clearing *every* daily habit is what
+   keeps your streak alive - the streak row shows how many are left.
 2. **Shared bank** - Everything either of you earns lands in one pooled
    balance. Personal totals are a record of who contributed, not a wallet.
 3. **Season Pass** - Points earned are season XP. Twelve tiers hand out bonus
@@ -15,8 +16,8 @@ both agreed on ahead of time.
 4. **Store** - Shop the reward catalog: fill a cart, then check out.
 5. **Coupons** - Every redeemed reward is a coupon until someone cashes it in.
    Used ones grey out instead of disappearing.
-6. **Sunday Night** - The week is its own thing: you each put something up on
-   Monday, the week scores itself on Sunday evening, and the recap hands the
+6. **Sunday Night** - The week is its own thing: you each put something up,
+   the week closes on Saturday, and on Sunday evening the recap hands the
    winner what the other one wagered.
 
 Habits and rewards can be added and removed in the app - the lists that ship
@@ -191,7 +192,7 @@ What it gives you:
 | Tool | Why |
 | --- | --- |
 | Time travel (±1 day, ±1 week) | Shifts what the app calls today, so daily resets, streaks and whole weeks are testable without waiting |
-| Jump past Sunday | Finishes the current week, so the recap opens itself on the reload |
+| Jump past the recap | Closes the current week and clears the 8pm gate, so the recap opens itself on the reload |
 | Settle last week | Scores it on the spot instead. The server still refuses a week that hasn't ended |
 | Grant points | Lands as a habit check, so the bank and season XP move together |
 | Clear daily list | Fills every daily habit for the active player in one tap |
@@ -273,15 +274,18 @@ derived from check-offs, tier claims and redemptions, so a second source of
 points would mean rewriting that invariant to earn nothing but inflation. It is
 worth being seen, and it feeds the recap.
 
-**The week.** Monday to Sunday. Each of you is scored against the median of
-your own last four weeks rather than against each other - a brutal week at work
+**The week.** Sunday to Saturday - the calendar week you already read on a
+wall, which is also what the streak strip shows, so the two never disagree
+about which week you are in. Each of you is scored against the median of your
+own last four weeks rather than against each other: a brutal week at work
 shouldn't hand the other one an automatic win, and a personal best should beat
-a coast. A margin under 5% is a dead heat. Both of you put a stake up on
-Monday; the winner claims what the other one wagered. Nobody owes a forfeit.
-Clear your combined target and you both get the shared prize on top.
+a coast. A margin under 5% is a dead heat. Both of you put a stake up; the
+winner claims what the other one wagered. Nobody owes a forfeit. Clear your
+combined target and you both get the shared prize on top.
 
-**The recap.** Sunday from 8pm, the first launch scores the week and opens the
-recap: the week's photos as a reel, its chart, the numbers, and the result. The
+**The recap.** The week closes at Saturday midnight and the recap is due the
+following evening, so Sunday Night is the look back rather than the deadline.
+From 8pm that Sunday, the first launch scores the week and opens the recap: the week's photos as a reel, its chart, the numbers, and the result. The
 stake stays face down until you have *both* opened yours - that shared beat is
 the point of the ritual - and flips on its own after a day so nobody is
 stranded when their partner is away. Past weeks stack up on a shelf under the
