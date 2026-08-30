@@ -25,7 +25,7 @@ export default function Toast({ notice, onDone }) {
         {notice.name ? (
           initial(notice.name)
         ) : (
-          <Icon name="check" size={14} strokeWidth="2.6" />
+          <Icon name={notice.icon ?? 'check'} size={14} strokeWidth="2.6" />
         )}
       </span>
 

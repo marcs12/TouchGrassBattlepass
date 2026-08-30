@@ -38,6 +38,37 @@ const PROOF_BUCKET = 'proof'
 const SETTLE_BACKLOG = 4
 // How many old photos one pass lets go at a time.
 const THIN_BATCH = 100
+
+/**
+ * Whether a failed write is worth trying again.
+ *
+ * Postgres says so in the SQLSTATE. A policy refusing the row, a constraint
+ * rejecting it, a column that does not exist: those fail identically forever,
+ * and one of them sitting at the head of the queue stops every write behind it
+ * - the board goes quiet and the dot says "1 waiting" until the end of time.
+ *
+ * Connections (08), transaction rollbacks and deadlocks (40), exhausted
+ * resources (53) and cancelled statements (57) are worth another go. So is any
+ * failure with no code at all, which is what a dead network looks like.
+ */
+const RETRYABLE_SQLSTATE = /^(08|40|53|57)/
+
+const worthRetrying = (error) =>
+  !error?.code || RETRYABLE_SQLSTATE.test(String(error.code))
+
+// What to say when one is dropped. Naming the thing that was lost beats a
+// SQLSTATE, and beats saying nothing at all - which is what happens if this
+// goes in the error banner, since the refetch straight afterwards clears it.
+const DROPPED = {
+  'cosign.add': 'Your stamp did not save.',
+  'cosign.remove': 'Taking that stamp back did not save.',
+  'check.add': 'That check-off did not save. Tick it again?',
+  'check.remove': 'Un-ticking that did not save.',
+  'coupon.set': 'That coupon did not save.',
+  'catalog.upsert': 'That edit did not save.',
+  'catalog.remove': 'Removing that did not save.',
+  'proof.remove': 'Removing that photo did not save.',
+}
 // How many objects the sweep lists per request.
 const SWEEP_PAGE = 100
 
@@ -699,13 +730,30 @@ export function useCloudGame() {
         const { error: opError } = await runOp(op)
 
         if (opError) {
+          // A photo is allowed to sulk without holding up the points behind it.
           if (op.type === 'proof.upload') {
             skip.add(op.id)
             continue
           }
-          setStatus('error')
-          setError(opError.message)
-          return
+
+          if (worthRetrying(opError)) {
+            setStatus('error')
+            setError(opError.message)
+            return
+          }
+
+          // Nothing will ever make this one land. Drop it and keep going, or
+          // it blocks every write made after it for good.
+          const rest = loadQueue().filter((candidate) => candidate.id !== op.id)
+          saveQueue(rest)
+          setQueue(rest)
+          setNotice({
+            id: `dropped-${op.id}`,
+            icon: 'lock',
+            title: 'Not saved',
+            text: DROPPED[op.type] ?? 'Something did not save.',
+          })
+          continue
         }
 
         // Re-read: anything enqueued while that op was in flight is in here
@@ -780,10 +828,23 @@ export function useCloudGame() {
     [fetchRows]
   )
 
-  // After joining by code you pick which of the two players you are.
+  /**
+   * Which of the two players this device is.
+   *
+   * It has to be written down, not just held in React. The cosigns policy asks
+   * whether the member on the row is the member this device is linked to, and
+   * `mark_recap_opened` records whoever that link names. Switching profiles on
+   * a shared phone while the server still thought we were the other one meant
+   * every stamp came back as a policy violation - and, worse, sat at the head
+   * of the queue refusing to drain.
+   *
+   * Used for the first pick after joining and for every switch after it: they
+   * are the same act.
+   */
   const pickMember = useCallback(
     async (memberId) => {
       setActiveId(memberId)
+      if (!householdId) return
       const { error: updateError } = await supabase
         .from('household_users')
         .update({ member_id: memberId })
@@ -1504,7 +1565,7 @@ export function useCloudGame() {
     start,
     join,
     pickMember,
-    switchMember: setActiveId,
+    switchMember: pickMember,
     toggleHabit,
     redeem,
     claimTier,
