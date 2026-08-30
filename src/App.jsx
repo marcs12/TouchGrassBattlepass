@@ -131,9 +131,16 @@ export default function App() {
 
   // A mis-tap is the easiest mistake to make here, so the check-off you just
   // made offers its own way back out. Undoing is the same toggle again.
+  //
+  // A weekly habit is ticked for the week, so whether this tap is an undo has
+  // to be read from the week rather than from today - otherwise un-ticking
+  // Tuesday's shop on Friday offers to undo a check-off it just removed.
   const check = (habit) => {
     tapFeedback()
-    const undoing = game.grind?.done?.[game.activeId]?.includes(habit.id)
+    const undoing =
+      habit.kind === 'weekly'
+        ? Boolean(game.grind?.weekDone?.[game.activeId]?.[habit.id])
+        : Boolean(game.grind?.done?.[game.activeId]?.includes(habit.id))
     game.toggleHabit(habit)
     if (undoing) return
     setFlash({

@@ -214,7 +214,10 @@ export default function DailyGrind({
     onToggle: onToggleHabit,
     onEdit: setDraft,
     onRemove: onRemoveHabit,
-    onProof: onAttachProof ? setShooting : null,
+    // The sheet is told which day's check-off it is decorating: a weekly
+    // habit ticked on Tuesday is still ticked on Friday, and its photo belongs
+    // to Tuesday's row.
+    onProof: onAttachProof ? (h) => setShooting({ ...h, day: dayOf(h) }) : null,
   })
 
   return (
@@ -445,7 +448,7 @@ export default function DailyGrind({
       {shooting && (
         <ProofSheet
           habit={shooting}
-          proof={proofFor(shooting.id, dayOf(shooting))}
+          proof={proofFor(shooting.id, shooting.day ?? grind.date)}
           proofUrl={proofUrl}
           onAttach={onAttachProof}
           onClear={onClearProof}

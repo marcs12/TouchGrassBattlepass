@@ -396,7 +396,9 @@ export function useLocalGame() {
   const attachProof = useCallback(
     async (habit, file) => {
       const who = state.activeId
-      const day = state.grind.date
+      // The day the check-off was made - see the synced backend. A weekly
+      // habit ticked on Tuesday keeps its photo on Tuesday.
+      const day = habit.day ?? state.grind.date
       if (!who) return
 
       const shot = await prepare(file)

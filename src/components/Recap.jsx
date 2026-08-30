@@ -56,6 +56,9 @@ export default function Recap({
   // go and fetch themselves rather than every launch reading a wider window.
   const inWindow = history.length > 0 && start >= history[0].day
   const [fetched, setFetched] = useState(null)
+  // A fetch that came back with nothing - offline, or a query that failed. The
+  // week still opens; it just cannot draw itself.
+  const [missed, setMissed] = useState(false)
   const asked = useRef(null)
 
   // Guarded by the week it asked for rather than by the effect's own lifetime:
@@ -66,8 +69,11 @@ export default function Recap({
     if (inWindow || !loadWeek || asked.current === start) return
     asked.current = start
     setFetched(null)
+    setMissed(false)
     loadWeek(start).then((data) => {
-      if (data && asked.current === start) setFetched(data)
+      if (asked.current !== start) return
+      if (data) setFetched(data)
+      else setMissed(true)
     })
   }, [inWindow, start, loadWeek])
 
@@ -81,7 +87,7 @@ export default function Recap({
   )
   const marks = fetched?.goalDates ?? goalDates
   const stampRows = fetched?.stamps ?? stamps
-  const loading = !inWindow && !fetched && Boolean(loadWeek)
+  const loading = !inWindow && !fetched && !missed && Boolean(loadWeek)
 
   useEffect(() => {
     onOpened?.(start)
@@ -172,6 +178,8 @@ export default function Recap({
 
         {loading ? (
           <p className="empty">Fetching that week…</p>
+        ) : missed ? (
+          <p className="empty">That week is further back than this device holds — its chart needs a connection.</p>
         ) : (
           <Progress history={days} members={members} goalDates={marks} fixed="week" />
         )}

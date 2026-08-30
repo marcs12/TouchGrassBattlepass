@@ -835,7 +835,11 @@ export function useCloudGame() {
       const shot = await prepare(file)
       if (!shot) return
 
-      const path = proofPathFor(householdId, activeId, habit.id, today, shot.ext)
+      // The day the check-off was made, which for a weekly habit ticked
+      // earlier in the week is not today. Naming the photo after today would
+      // upload it against a row that does not exist.
+      const day = habit.day ?? today
+      const path = proofPathFor(householdId, activeId, habit.id, day, shot.ext)
       await putProof(path, shot.blob)
       enqueue({
         type: 'proof.upload',
@@ -843,7 +847,7 @@ export function useCloudGame() {
         path,
         w: shot.width,
         h: shot.height,
-        match: { member_id: activeId, habit_id: habit.id, day: today },
+        match: { member_id: activeId, habit_id: habit.id, day },
       })
     },
     [householdId, activeId, today, enqueue]
