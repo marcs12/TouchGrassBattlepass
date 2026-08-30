@@ -98,7 +98,7 @@ export default function WeekBanner({
               ? 'Nobody has banked anything yet'
               : leader
                 ? `${leader.name} leads by ${week.lead.toLocaleString()} pts`
-                : 'Level — too close to call'}
+                : 'Level. Too close to call'}
           </p>
         </div>
         <span className="week__badge" aria-hidden="true">
@@ -163,10 +163,10 @@ export default function WeekBanner({
 
               <p className="week__stake label">
                 {stake ? (
-                  <>
+                  <span key={stake} className="week__stake-name">
                     <Icon name="trophy" size={13} strokeWidth="1.9" />
                     {stake}
-                  </>
+                  </span>
                 ) : (
                   <span className="week__stake--empty">nothing up yet</span>
                 )}
@@ -203,7 +203,7 @@ export default function WeekBanner({
                     >
                       <Icon name="minus" size={14} strokeWidth="2.6" />
                     </button>
-                    <output className="stepper__value">
+                    <output key={handicapOf(member)} className="stepper__value">
                       ×{handicapOf(member).toFixed(2)}
                     </output>
                     <button
@@ -285,8 +285,9 @@ export default function WeekBanner({
           )}
 
           <p className="week__note label">
-            Most points on Saturday night takes the week and claims what the
-            other one put up. Nobody owes a forfeit — someone just gets spoiled.
+            Most points by Saturday night takes the week, and gets whatever
+            the other one put up. Nobody owes a forfeit. Someone just gets
+            spoiled.
           </p>
         </div>
       )}

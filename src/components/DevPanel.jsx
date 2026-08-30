@@ -106,7 +106,7 @@ export default function DevPanel({ game, onClose }) {
           </Row>
           {game.code && <Row label="Code">{game.code}</Row>}
           <Row label="Playing as">
-            {game.members?.find((m) => m.id === game.activeId)?.name ?? '—'}
+            {game.members?.find((m) => m.id === game.activeId)?.name ?? 'nobody'}
           </Row>
           {game.error && <Row label="Error">{game.error}</Row>}
         </section>
@@ -184,9 +184,9 @@ export default function DevPanel({ game, onClose }) {
             </button>
           </div>
           <p className="dev__hint">
-            A week runs Sunday to Saturday and its recap is due the Sunday
-            after. Jumping past it closes the week and the recap opens itself
-            on the reload. Settling scores it on the spot instead - the server
+            A week runs Sunday to Saturday, and its recap is due the Sunday
+            after. Jumping past it closes the week, and the recap opens itself
+            on the reload. Settling scores it on the spot instead. The server
             still refuses a week that hasn't ended.
           </p>
         </section>
@@ -202,11 +202,11 @@ export default function DevPanel({ game, onClose }) {
             </button>
           </div>
           <p className="dev__hint">
-            Ending rolls the track over without waiting for all twelve tiers -
-            the bank, the coupons and the Sundays carry across, and the claims
+            Ending rolls the track over without waiting for all twelve tiers.
+            The bank, the coupons and the Sundays carry across, and the claims
             reset. Thinning drops all but the newest few photos of any week
-            older than eight; the sweep behind it deletes objects no check-off
-            points at any more. Both run by themselves on launch.
+            older than eight, and the sweep behind it deletes anything no
+            check-off points at any more. Both run by themselves on launch.
           </p>
           {thinNote && <p className="dev__hint">{thinNote}</p>}
         </section>

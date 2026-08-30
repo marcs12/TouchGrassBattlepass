@@ -100,8 +100,8 @@ export default function SeasonPass({
         <div>
           <h2 className="store__title">{seasonName(number)} Pass</h2>
           <p className="store__sub">
-            Every point earned in the Daily Grind is season XP. Spending in the
-            store never costs you track progress — the pass only moves forward.
+            Every point you earn in the Daily Grind is season XP. Spending it
+            in the store costs you none of it. The pass only goes forward.
           </p>
         </div>
 
@@ -144,9 +144,9 @@ export default function SeasonPass({
               {seasonName(number)}, all twelve tiers
             </h3>
             <p className="rollover__note">
-              {xp.toLocaleString()} XP earned. Rolling over resets the track and
-              nothing else — the bank, the coupons, your streaks and every
-              Sunday stay exactly where they are.
+              {xp.toLocaleString()} XP earned. Starting the next one only
+              resets the track. The bank, the coupons, your streaks and every
+              Sunday stay right where they are.
             </p>
             <button
               type="button"
@@ -167,13 +167,13 @@ export default function SeasonPass({
       </Pane>
 
       {weeks.some((w) => w.status === 'settled') && (
-        <Pane title="sundays — newest first" tone="e" flush>
+        <Pane title="sundays · newest first" tone="e" flush>
           <WeekShelf weeks={weeks} members={members} onOpen={onOpenRecap} />
         </Pane>
       )}
 
       {pastSeasons.length > 0 && (
-        <Pane title="seasons — newest first" tone="a" flush>
+        <Pane title="seasons · newest first" tone="a" flush>
           <section className="shelf" aria-label="Past seasons">
             <h3 className="habits__title label">Seasons · newest first</h3>
             <ul className="shelf__list">

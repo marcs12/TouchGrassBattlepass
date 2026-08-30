@@ -61,7 +61,7 @@ export default function ThemePicker() {
                   type="button"
                   role="menuitemradio"
                   aria-checked={active}
-                  title={`${t.name} — ${t.blurb}`}
+                  title={`${t.name} · ${t.blurb}`}
                   className={`themer__chip ${active ? 'themer__chip--on' : ''}`}
                   onClick={() => {
                     setThemeId(t.id)

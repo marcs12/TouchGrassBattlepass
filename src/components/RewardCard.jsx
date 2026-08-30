@@ -28,7 +28,9 @@ export default function RewardCard({
         <span className="card__tier">{tier.label}</span>
 
         {inCart > 0 ? (
-          <span className="card__owned card__owned--cart">
+          // Keyed on the count so each addition replays the pop rather than
+          // the badge animating once and sitting still after that.
+          <span key={inCart} className="card__owned card__owned--cart">
             <Icon name="cart" size={12} />×{inCart}
           </span>
         ) : (

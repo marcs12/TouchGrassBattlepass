@@ -88,8 +88,8 @@ export default function Storefront({
         <div>
           <h2 className="store__title">Reward Store</h2>
           <p className="store__sub">
-            Fill the cart, then check out. Everything here is agreed on in
-            advance — no renegotiating at the till.
+            Fill the cart, then check out. You both agreed on this lot up
+            front, so no haggling at the till.
           </p>
         </div>
 
@@ -113,7 +113,7 @@ export default function Storefront({
               <p className="nextup__hint">
                 {balance === 0 && redeemed.length === 0 ? (
                   <>
-                    Your first check-off starts it off —{' '}
+                    Tick one thing to get going.{' '}
                     <strong>{nextUp.cost.toLocaleString()}</strong> pts opens this
                   </>
                 ) : (

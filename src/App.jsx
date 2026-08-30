@@ -95,7 +95,7 @@ export default function App() {
       icon: 'flame',
       eyebrow: 'Streak',
       title: `${milestone} days straight`,
-      note: 'Whole daily list, every one of those days.',
+      note: 'You showed up every one of those days.',
     })
   }, [streak, game.activeId])
 
@@ -292,7 +292,7 @@ export default function App() {
                     icon: 'trophy',
                     eyebrow: `${seasonName(finished)} complete`,
                     title: `${seasonName(finished + 1)} starts now`,
-                    note: 'Track back to zero. The bank, the coupons and every Sunday stay.',
+                    note: 'Track goes back to zero. The bank, the coupons and every Sunday stay put.',
                   })
                 }}
                 onClaimTier={(tier) => {

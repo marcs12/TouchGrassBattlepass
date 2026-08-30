@@ -186,7 +186,7 @@ export default function DailyGrind({
             weekday: 'long',
           })}`
     }
-    if (daysLeft <= 0) return 'last chance — the week is scoring'
+    if (daysLeft <= 0) return 'last chance, the week is scoring'
     return `${daysLeft} day${daysLeft === 1 ? '' : 's'} left this week`
   }
 
@@ -226,8 +226,8 @@ export default function DailyGrind({
         <div>
           <h2 className="store__title">Daily Grind</h2>
           <p className="store__sub">
-            You each keep your own list — if you both did it, you both check it
-            and you both get paid. Everything lands in the shared bank.
+            You each keep your own list. If you both did it, you both tick it
+            and you both get paid. It all lands in the same bank.
           </p>
         </div>
 
@@ -266,8 +266,8 @@ export default function DailyGrind({
       {balance === 0 && banked === 0 && streak === 0 && (
         <p className="bubble">
           <Icon name="spark" size={16} strokeWidth="1.9" />
-          Tick anything below to open the store. {STREAK_MIN_CHECKS} check-offs
-          in a day starts your streak.
+          Tick anything below and the store opens up. Do {STREAK_MIN_CHECKS} in
+          a day and your streak starts.
         </p>
       )}
 
@@ -307,8 +307,8 @@ export default function DailyGrind({
               like a bug rather than an unfinished list. */}
           <span className="streak__rule label">
             {checkedToday >= STREAK_MIN_CHECKS
-              ? `${checkedToday} checked today — the day counts`
-              : `${checkedToday} of ${STREAK_MIN_CHECKS} today — any ${STREAK_MIN_CHECKS} keep it`}
+              ? `${checkedToday} ticked today, so today counts`
+              : `${checkedToday} of ${STREAK_MIN_CHECKS} today, any ${STREAK_MIN_CHECKS} will do`}
           </span>
           {/* A streak that dies to one bad Tuesday stops being something you
               protect, so a couple of misses a month are forgiven. Saying how
@@ -395,7 +395,7 @@ export default function DailyGrind({
         )
       )}
 
-      <Pane title="daily.list — resets at midnight" tone="c" flush>
+      <Pane title="daily.list · back at midnight" tone="c" flush>
         <section className="habits">
           <ul className="habits__list">
             {dailyHabits.map((habit) => (
@@ -406,7 +406,7 @@ export default function DailyGrind({
       </Pane>
 
       {weeklyHabits.length > 0 && (
-        <Pane title="weekly.list — one tick per week" tone="b" flush>
+        <Pane title="weekly.list · once a week" tone="b" flush>
           <section className="habits">
             <ul className="habits__list">
               {weeklyHabits.map((habit) => (
@@ -423,7 +423,7 @@ export default function DailyGrind({
         <li className="pixheart" />
       </ol>
 
-      <Pane title="bonus.list — bigger payout" tone="e" flush>
+      <Pane title="bonus.list · pays more" tone="e" flush>
         <section className="habits">
           <ul className="habits__list">
             {bonusHabits.map((habit) => (

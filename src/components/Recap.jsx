@@ -179,7 +179,10 @@ export default function Recap({
         {loading ? (
           <p className="empty">Fetching that week…</p>
         ) : missed ? (
-          <p className="empty">That week is further back than this device holds — its chart needs a connection.</p>
+          <p className="empty">
+            That week is older than this phone keeps. You need a connection to
+            pull the chart back.
+          </p>
         ) : (
           <Progress history={days} members={members} goalDates={marks} fixed="week" />
         )}
@@ -222,8 +225,8 @@ export default function Recap({
         {score.team?.clear && (
           <p className="banner">
             <Icon name="flag" size={18} strokeWidth="1.9" />
-            Team clear — {week.stake_team ?? 'something you only do together'}.
-            It's in your coupons.
+            Team clear. {week.stake_team ?? 'Something you only do together'}
+            is sitting in your coupons.
           </p>
         )}
 

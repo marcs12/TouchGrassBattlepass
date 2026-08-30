@@ -1548,6 +1548,39 @@ h3 {
   animation: badge-pop 0.3s var(--ease) both;
 }
 
+/* Something landing in the cart. Keyed on the count in the markup, so it fires
+   again on the second one rather than only when the badge first appears. */
+.card__owned--cart {
+  animation: badge-pop 0.34s var(--ease) both;
+}
+
+/* Pinning what you are saving for. */
+.card__pin--on {
+  animation: box-thump 0.34s var(--ease) both;
+}
+
+/* A stake being put up, and a handicap being nudged: both are keyed on their
+   own value, so they replay whenever the value actually changes. */
+.week__stake-name,
+.stepper__value {
+  animation: nudge 0.3s var(--ease) both;
+}
+
+/* Cashing a coupon in. The art takes a stamp as it goes quiet. The row itself
+   needs nothing: using one moves it from the active list to the used one, so
+   it re-enters and plays `row-in` on the way. */
+.coupon--used .coupon__art {
+  animation: stamp 0.42s var(--ease) both;
+}
+
+@keyframes nudge {
+  from {
+    opacity: 0.3;
+    transform: translate3d(0, -3px, 0) scale(0.94);
+  }
+}
+
+
 /* Points landing in (or leaving) the shared bank, floated off the chip. The
    chip sits at the top of a sticky bar, so this hangs below it - above would
    be clipped by the viewport edge. */
@@ -2888,6 +2921,15 @@ h3 {
   flex-wrap: wrap;
   gap: 6px;
   margin: 0;
+}
+
+/* The stake sits in a flex row with the change button, so its own icon and
+   text have to line up as one item. */
+.week__stake-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .week__team {

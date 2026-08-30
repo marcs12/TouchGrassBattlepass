@@ -45,7 +45,7 @@ export default function ProofSheet({ habit, proof, proofUrl, onAttach, onClear, 
           <span className="sheet__meta">
             <strong>{habit.title}</strong>
             <span className="label">
-              {proof ? 'Proof attached' : 'Show your work — optional, always'}
+              {proof ? 'Photo attached' : 'Show your work if you feel like it'}
             </span>
           </span>
           <button type="button" className="sheet__close" aria-label="Close" onClick={onClose}>
@@ -100,8 +100,8 @@ export default function ProofSheet({ habit, proof, proofUrl, onAttach, onClear, 
         </div>
 
         <p className="sheet__note label">
-          Photos are shrunk on this device before they go anywhere, and the
-          location tag is dropped on the way.
+          Photos get shrunk on your phone before they go anywhere, and the
+          location tag comes off on the way out.
         </p>
       </div>
     </div>,
