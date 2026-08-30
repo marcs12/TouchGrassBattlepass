@@ -227,7 +227,7 @@ What it gives you:
 | Clear today / refetch | Undo a test run, or force a re-read in synced mode |
 | Grant or take back points | +10 through +2,500, and -10 through -100. Taking points back can't overdraw the bank |
 | End season | Rolls the track over without waiting for all twelve tiers |
-| Thin old photos | Runs the photo thinning pass on the spot and says how many went |
+| Thin + sweep photos | Runs the thinning and orphan sweep on the spot and says how many went |
 | Clear all points | Wipes points, receipts, claimed tiers, weeks, stamps and seasons back to a fresh bank. Asks twice, since in synced mode it hits both players |
 | Leave board / wipe local | Returns this device to setup without touching shared data |
 
@@ -299,7 +299,14 @@ drops the EXIF - the location tag included - on the way out.
 
 Reels are thinned as they age. The last eight weeks keep every photo; older
 weeks keep their newest three and let the rest go, which is what stops a bucket
-that only ever grows. The check-off itself is untouched - the points stay, the
+that only ever grows. A sweep runs behind the thinning and deletes objects no
+check-off points at any more - the picture belonging to a check-off that was
+undone, say. It compares against every photo the board still references rather
+than the ones in the loaded window, because a photo on a three-month-old
+check-off is still somebody's photo, and it leaves anything uploaded in the
+last day alone: a photo is uploaded a moment before it is linked, and the phone
+uploading may not be the phone sweeping. Undoing a check-off now takes its
+photo with it, so most of that litter is never made in the first place. The check-off itself is untouched - the points stay, the
 log entry stays, only the picture goes - and the cutoff sits further back than
 the window the app reads, so nothing is ever taken out from under a reel on
 screen. It runs once per launch, in the background, and the rule lives in

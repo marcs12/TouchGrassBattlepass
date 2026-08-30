@@ -12,7 +12,7 @@ import { STREAK_MIN_CHECKS } from '../data/streak'
 import { recentDays, shiftDay, today } from '../lib/day'
 import { loadState, saveState } from '../lib/storage'
 import { recapReady, scoreWeek, weekDays, weekStart } from '../data/week'
-import { getProof, putProof, removeProof } from '../lib/proofStore'
+import { getProof, proofKeys, putProof, removeProof } from '../lib/proofStore'
 import { prepare } from '../lib/photo'
 import { thinnable } from '../data/proof'
 
@@ -287,6 +287,12 @@ export function useLocalGame() {
 
       const day = undoing ? checkedDay : prev.grind.date
       const delta = undoing ? -habit.points : habit.points
+
+      // A check-off that is going away takes its photo with it: nothing would
+      // point at it afterwards. The blob itself is collected by the sweep on
+      // the next launch, which keeps this updater free of side effects.
+      const proofs = { ...prev.proofs }
+      if (undoing) delete proofs[proofKey(who, habit.id, day)]
       const entry = {
         id: `${habit.id}-${who}-${Date.now()}`,
         memberId: who,
@@ -299,6 +305,7 @@ export function useLocalGame() {
 
       return {
         ...prev,
+        proofs,
         history: addToHistory(prev.history, day, who, delta),
         log: [entry, ...prev.log].slice(0, LOG_LIMIT),
         balance: prev.balance + delta,
@@ -604,14 +611,41 @@ export function useLocalGame() {
     return { removed: gone.size }
   }, [state.proofs, state.grind.date])
 
-  // Once a session, the same as the synced backend.
+  /**
+   * Drops blobs that nothing points at any more - the picture belonging to a
+   * check-off that was undone, or to a board that was wiped. `proofs` is the
+   * only index into the store, so a key missing from it is unreachable by
+   * anything and safe to delete.
+   *
+   * No grace period here, unlike the synced backend: there is no upload in
+   * flight and no second device that might be about to claim one.
+   */
+  const sweepOrphans = useCallback(async () => {
+    const keys = await proofKeys()
+    if (!keys?.length) return { removed: 0 }
+
+    const kept = new Set(Object.keys(state.proofs))
+    const doomed = keys.filter((key) => !kept.has(key))
+    for (const key of doomed) {
+      removeProof(key)
+      const url = urls.get(key)
+      if (url) {
+        URL.revokeObjectURL(url)
+        urls.delete(key)
+      }
+    }
+    return { removed: doomed.length }
+  }, [state.proofs])
+
+  // Once a session, the same as the synced backend. Thinning first, so the
+  // sweep behind it sees no trace of what it dropped.
   const thinnedThisSession = useRef(false)
 
   useEffect(() => {
     if (!state.members || thinnedThisSession.current) return
     thinnedThisSession.current = true
-    thinOldProofs()
-  }, [state.members, thinOldProofs])
+    thinOldProofs().then(sweepOrphans)
+  }, [state.members, thinOldProofs, sweepOrphans])
 
   // Weeks settle on open, and catch up on any that were missed.
   useEffect(() => {
@@ -878,7 +912,11 @@ export function useLocalGame() {
       seedHistory: devSeedHistory,
       settleWeek: devSettleWeek,
       endSeason: () => endSeason(1, state.season.n),
-      thinProofs: thinOldProofs,
+      thinProofs: async () => {
+        const thinned = await thinOldProofs()
+        const swept = await sweepOrphans()
+        return { removed: thinned.removed, swept: swept.removed }
+      },
       forget: devForget,
       refresh: null,
     },

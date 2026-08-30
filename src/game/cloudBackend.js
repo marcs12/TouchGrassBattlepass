@@ -22,7 +22,7 @@ import {
 } from '../lib/queue'
 import { getProof, putProof, removeProof } from '../lib/proofStore'
 import { prepare } from '../lib/photo'
-import { thinBefore, thinnable } from '../data/proof'
+import { orphansIn, thinBefore, thinnable } from '../data/proof'
 
 // Supabase-backed mode: two devices, one board.
 //
@@ -38,6 +38,8 @@ const PROOF_BUCKET = 'proof'
 const SETTLE_BACKLOG = 4
 // How many old photos one pass lets go at a time.
 const THIN_BATCH = 100
+// How many objects the sweep lists per request.
+const SWEEP_PAGE = 100
 
 // Signing a URL is a round trip, and a recap reel asks for the same handful
 // over and over. Cache under the expiry so a scroll doesn't re-sign anything.
@@ -668,27 +670,37 @@ export function useCloudGame() {
     [householdId]
   )
 
+  /**
+   * Replays queued writes in order.
+   *
+   * The queue is re-read from storage after every op rather than sliced from a
+   * copy taken at the start. A write made while this is awaiting the network -
+   * a second check-off, or the photo removal that rides along with an undo -
+   * lands in storage behind our back, and saving a stale copy over the top of
+   * it dropped it silently.
+   *
+   * A photo that fails is skipped for the rest of the pass rather than
+   * retried: a sulking upload must never hold up the points behind it. It
+   * stays in the queue and goes again next time.
+   */
   const flush = useCallback(async () => {
     if (flushing.current || isOffline()) return
     flushing.current = true
 
     try {
-      let pending = loadQueue()
-      // Photos that failed sit here and go back on the queue at the end, so a
-      // sulking upload can't hold up the check-offs behind it. Points first.
-      const deferred = []
+      const skip = new Set()
 
-      while (pending.length > 0) {
-        const [op] = pending
+      for (;;) {
+        const pending = loadQueue()
+        const op = pending.find((candidate) => !skip.has(candidate.id))
+        if (!op) break
+
         setStatus('saving')
         const { error: opError } = await runOp(op)
 
         if (opError) {
           if (op.type === 'proof.upload') {
-            deferred.push(op)
-            pending = pending.slice(1)
-            saveQueue([...pending, ...deferred])
-            setQueue([...pending, ...deferred])
+            skip.add(op.id)
             continue
           }
           setStatus('error')
@@ -696,12 +708,14 @@ export function useCloudGame() {
           return
         }
 
-        pending = pending.slice(1)
-        saveQueue([...pending, ...deferred])
-        setQueue([...pending, ...deferred])
+        // Re-read: anything enqueued while that op was in flight is in here
+        // too, and must survive.
+        const rest = loadQueue().filter((candidate) => candidate.id !== op.id)
+        saveQueue(rest)
+        setQueue(rest)
       }
 
-      setStatus(deferred.length > 0 ? 'saving' : isOffline() ? 'offline' : 'idle')
+      setStatus(skip.size > 0 ? 'saving' : isOffline() ? 'offline' : 'idle')
       if (householdId) fetchRows(householdId)
     } finally {
       flushing.current = false
@@ -795,6 +809,26 @@ export function useCloudGame() {
       // Unchecking claws points back out of the shared bank, so it has to cover them.
       if (checkedDay && view.balance < habit.points) return
 
+      // A check-off that is going away takes its photo with it. The row is
+      // about to be deleted, so nothing would point at the object afterwards
+      // and it would sit in the bucket for good.
+      if (checkedDay) {
+        const shot = rows.checks.find(
+          (c) =>
+            c.member_id === activeId &&
+            c.habit_id === habit.id &&
+            c.day === checkedDay &&
+            c.proof_path
+        )
+        if (shot) {
+          enqueue({
+            type: 'proof.remove',
+            path: shot.proof_path,
+            match: { member_id: activeId, habit_id: habit.id, day: checkedDay },
+          })
+        }
+      }
+
       enqueue(
         checkedDay
           ? {
@@ -819,7 +853,7 @@ export function useCloudGame() {
             }
       )
     },
-    [householdId, activeId, today, view, enqueue]
+    [householdId, activeId, today, view, rows, enqueue]
   )
 
   // ---- proof, stamps and the week ---------------------------------------
@@ -1089,15 +1123,72 @@ export function useCloudGame() {
     return { removed }
   }, [householdId, today])
 
+  /**
+   * Deletes objects in the bucket that no check-off points at any more.
+   *
+   * Thinning only ever looks at rows that still carry a path, so a photo whose
+   * check-off was deleted is invisible to it and stays for good. This is the
+   * pass that collects those.
+   *
+   * It compares against every referenced path on the board rather than the
+   * ones in the loaded window - a photo on a three-month-old check-off is
+   * still somebody's photo - and leaves anything uploaded in the last day
+   * alone, because a photo is uploaded a moment before it is linked and the
+   * phone uploading may not be the phone sweeping.
+   */
+  const sweepOrphans = useCallback(async () => {
+    if (!householdId || isOffline()) return { removed: 0 }
+
+    // A queued upload is an object with no row pointing at it yet, on purpose.
+    if (loadQueue().some((op) => op.type === 'proof.upload')) return { removed: 0 }
+
+    const { data: linked, error: readError } = await supabase
+      .from('habit_checks')
+      .select('proof_path')
+      .eq('household_id', householdId)
+      .not('proof_path', 'is', null)
+    if (readError) return { removed: 0 }
+
+    const objects = []
+    for (let offset = 0; ; offset += SWEEP_PAGE) {
+      const { data: page, error: listError } = await supabase.storage
+        .from(PROOF_BUCKET)
+        .list(householdId, { limit: SWEEP_PAGE, offset })
+      if (listError) return { removed: 0 }
+      for (const object of page ?? []) {
+        objects.push({ path: `${householdId}/${object.name}`, createdAt: object.created_at })
+      }
+      if (!page || page.length < SWEEP_PAGE) break
+    }
+
+    const doomed = orphansIn(
+      objects,
+      linked.map((row) => row.proof_path)
+    )
+    if (doomed.length === 0) return { removed: 0 }
+
+    let removed = 0
+    for (let from = 0; from < doomed.length; from += THIN_BATCH) {
+      const paths = doomed.slice(from, from + THIN_BATCH).map((o) => o.path)
+      const { error: removeError } = await supabase.storage.from(PROOF_BUCKET).remove(paths)
+      if (removeError) break
+      paths.forEach((path) => signed.delete(path))
+      removed += paths.length
+    }
+
+    return { removed }
+  }, [householdId])
+
   // Once a session, after the board is up. Both phones may run it; the second
-  // one simply finds nothing left to thin.
+  // one simply finds nothing left to do. Thinning goes first: it deletes both
+  // the object and the row's path, so the sweep behind it sees no trace.
   const thinnedThisSession = useRef(false)
 
   useEffect(() => {
     if (!householdId || !ready || isOffline() || thinnedThisSession.current) return
     thinnedThisSession.current = true
-    thinOldProofs()
-  }, [householdId, ready, thinOldProofs])
+    thinOldProofs().then(sweepOrphans)
+  }, [householdId, ready, thinOldProofs, sweepOrphans])
 
   const redeem = useCallback(
     async (reward) => {
@@ -1446,7 +1537,11 @@ export function useCloudGame() {
       // A single point is enough for the server: the twelve-tier gate is the
       // client's, and this is the tool for not waiting on it.
       endSeason: () => endSeason(1, view.season?.n),
-      thinProofs: thinOldProofs,
+      thinProofs: async () => {
+        const thinned = await thinOldProofs()
+        const swept = await sweepOrphans()
+        return { removed: thinned.removed, swept: swept.removed }
+      },
       forget: devForget,
       refresh: () => fetchRows(householdId),
     },

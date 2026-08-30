@@ -17,6 +17,14 @@ import { weekStart } from './week'
 export const KEEP_WEEKS = 8
 export const KEEP_PER_WEEK = 3
 
+// How long an unreferenced object is left alone before it counts as litter.
+//
+// A photo is uploaded first and linked to its check-off a moment later, and the
+// phone doing the uploading may not be the phone doing the sweeping. A day of
+// grace makes that window impossible to lose a real photo in, and costs
+// nothing: the objects being collected have been dead for weeks.
+export const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000
+
 /** The Sunday KEEP_WEEKS weeks back. Everything from here on keeps its reel. */
 export const thinBefore = (today) => shiftDay(weekStart(today), -7 * KEEP_WEEKS)
 
@@ -49,4 +57,29 @@ export function thinnable(proofs, today) {
     doomed.push(...[...week].sort(newestFirst).slice(KEEP_PER_WEEK))
   }
   return doomed
+}
+
+/**
+ * Objects in the bucket that nothing points at any more.
+ *
+ * Deleting a check-off takes its row but not its picture, so the bucket keeps
+ * bytes that no reel will ever show. Thinning does not collect these - it only
+ * looks at rows that still carry a path - so they need their own pass.
+ *
+ * `referenced` must be every path the board still uses, not just the ones in
+ * whatever window happens to be loaded: a photo on a check-off from three
+ * months ago is still somebody's photo.
+ *
+ * An object whose age cannot be read is left alone. The cost of keeping litter
+ * is a few kilobytes; the cost of deleting a photo is a photo.
+ */
+export function orphansIn(objects, referenced, now = Date.now()) {
+  const keep = new Set(referenced.filter(Boolean))
+
+  return objects.filter((object) => {
+    if (!object?.path || keep.has(object.path)) return false
+    const at = object.createdAt ? new Date(object.createdAt).getTime() : NaN
+    if (Number.isNaN(at)) return false
+    return now - at > ORPHAN_GRACE_MS
+  })
 }

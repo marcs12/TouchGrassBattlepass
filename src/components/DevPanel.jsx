@@ -42,11 +42,12 @@ export default function DevPanel({ game, onClose }) {
 
   const thin = async () => {
     const result = await dev.thinProofs?.()
-    setThinNote(
-      result?.removed
-        ? `Let go of ${result.removed} old photo${result.removed > 1 ? 's' : ''}.`
-        : 'Nothing old enough to thin.'
-    )
+    const thinned = result?.removed ?? 0
+    const swept = result?.swept ?? 0
+    const parts = []
+    if (thinned) parts.push(`let go of ${thinned} old photo${thinned > 1 ? 's' : ''}`)
+    if (swept) parts.push(`swept ${swept} orphan${swept > 1 ? 's' : ''}`)
+    setThinNote(parts.length ? `${parts.join(', ')}.` : 'Nothing to thin or sweep.')
   }
 
   const travel = (days) => {
@@ -197,14 +198,15 @@ export default function DevPanel({ game, onClose }) {
               end season
             </button>
             <button type="button" className="dev__btn" onClick={thin}>
-              thin old photos
+              thin + sweep photos
             </button>
           </div>
           <p className="dev__hint">
             Ending rolls the track over without waiting for all twelve tiers -
             the bank, the coupons and the Sundays carry across, and the claims
             reset. Thinning drops all but the newest few photos of any week
-            older than eight, which is what runs by itself on launch.
+            older than eight; the sweep behind it deletes objects no check-off
+            points at any more. Both run by themselves on launch.
           </p>
           {thinNote && <p className="dev__hint">{thinNote}</p>}
         </section>
